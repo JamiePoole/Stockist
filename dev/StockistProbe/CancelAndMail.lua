@@ -1,6 +1,6 @@
--- /stkprobe cancelwatch : watch what happens to your gold and messages while YOU cancel one of your own
+-- /stkprobe cancelwatch : for 30 seconds, watch what happens to your gold and messages while YOU cancel one of your own
 --   auctions by hand in the normal Auction House window. The probe never cancels anything itself.
---   Steps: run it, cancel ONE cheap listing within 3 minutes, note any popup text, then /reload.
+--   Steps: run it, cancel ONE cheap listing within 30 seconds, note any popup text, then /reload.
 -- /stkprobe mailcut : with the mailbox OPEN, read sale/purchase invoices in the inbox (sale price, deposit,
 --   Auction House cut). Needs at least one auction mail ("Auction successful" etc.) waiting.
 -- Results: StockistProbeDB.cancelwatch and StockistProbeDB.mailcut.
@@ -40,6 +40,7 @@ local WATCH_EVENTS = {
     "PLAYER_MONEY", "AUCTION_CANCELED", "CHAT_MSG_SYSTEM", "CHAT_MSG_MONEY", "UI_INFO_MESSAGE",
     "UI_ERROR_MESSAGE", "MAIL_INBOX_UPDATE", "OWNED_AUCTIONS_UPDATED",
 }
+local WATCH_SECONDS = 30
 local watching, watch = false, nil
 local f = CreateFrame("Frame")
 for _, e in ipairs(WATCH_EVENTS) do pcall(f.RegisterEvent, f, e) end
@@ -59,8 +60,9 @@ StockistProbeCommands.cancelwatch = function()
     StockistProbeDB = StockistProbeDB or {}
     StockistProbeDB.cancelwatch = watch
     watching = true
-    say(("watching for 3 minutes. Gold now: %s copper. Cancel ONE cheap listing in the AH window."):format(str(watch.moneyBefore)))
-    C_Timer.After(180, function()
+    say(("watching for %d seconds. Gold now: %s copper. Cancel ONE cheap listing in the AH window NOW."):format(
+        WATCH_SECONDS, str(watch.moneyBefore)))
+    C_Timer.After(WATCH_SECONDS, function()
         watching = false
         watch.moneyAfter = GetMoney()
         watch.ownedAfter = snapshotOwned()
