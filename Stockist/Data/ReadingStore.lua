@@ -190,13 +190,43 @@ function Store:PriceAt(itemID, ts)
     return bestPrice
 end
 
---- Percent change of the latest scan's price versus the scan before it. Nil with fewer than two
---- scans kept (only the last day of scans is) or a zero earlier price.
-function Store:ScanChange(itemID)
+--- Percent change of the latest scan's price versus the average of the scans in the `windowSec` before it,
+--- which smooths out the jumpiness of comparing two single scans. Returns percent, scansUsed; nil unless at
+--- least two earlier scans fall in the window (or the average is zero). Only the last day of scans is kept.
+function Store:SmoothedChange(itemID, windowSec)
     local it = self.db.items[itemID]
-    local n = it and it.tp and #it.tp or 0
-    if n < 2 or it.tp[n - 1] == 0 then return nil end
-    return (it.tp[n] - it.tp[n - 1]) / it.tp[n - 1] * 100
+    local n = it and it.tt and #it.tt or 0
+    if n < 3 then return nil end
+    local sum, count = 0, 0
+    for i = n - 1, 1, -1 do
+        if it.tt[i] < it.tt[n] - windowSec then break end
+        sum, count = sum + it.tp[i], count + 1
+    end
+    if count < 2 then return nil end
+    local mean = sum / count
+    if mean == 0 then return nil end
+    return (it.tp[n] - mean) / mean * 100, count
+end
+
+--- Percent change of the latest price over (up to) the last `spanSec`. Uses the price at `now - spanSec`; with
+--- less history than that, the oldest price we hold, as long as it covers at least half the span.
+--- Returns percent, secondsActuallyCovered; nil if there is no latest reading or too little history.
+function Store:ChangeOver(itemID, spanSec, now)
+    local last = self:Latest(itemID)
+    if not last then return nil end
+    local pct = self:Change(itemID, spanSec, now)
+    if pct then return pct, spanSec end
+    local it = self.db.items[itemID]
+    local oldestT, oldestOpen
+    for res in pairs(RESOLUTIONS) do
+        for _, candle in pairs(it[res]) do
+            if not oldestT or candle.t < oldestT then oldestT, oldestOpen = candle.t, candle.o end
+        end
+    end
+    if not oldestT or oldestOpen == 0 then return nil end
+    local covered = now - oldestT
+    if covered < spanSec * 0.5 then return nil end
+    return (last.price - oldestOpen) / oldestOpen * 100, covered
 end
 
 --- Percent change of the latest price versus the price `windowSec` before `now`.

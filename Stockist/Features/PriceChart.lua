@@ -14,10 +14,12 @@ Stockist.PriceChart = PriceChart
 -- end now (the last 24 hours, 7 days, 30 days), as on any chart for a market that never closes.
 -- Not offered yet: ALL (everything stored); see docs/ROADMAP.md.
 local TIMEFRAMES = {
-    { key = "1D", span = 86400, prefer = { "hourly", "ticks" } },
-    { key = "1W", span = 7 * 86400, prefer = { "hourly", "ticks" } },
-    { key = "1M", span = 30 * 86400, prefer = { "daily", "hourly", "ticks" } },
+    { key = "1D", span = 86400, label = "24h", prefer = { "hourly", "ticks" } },
+    { key = "1W", span = 7 * 86400, label = "7d", prefer = { "hourly", "ticks" } },
+    { key = "1M", span = 30 * 86400, label = "30d", prefer = { "daily", "hourly", "ticks" } },
 }
+-- The "recent" move beside the price compares the latest scan with the average of the scans in this window.
+local RECENT_WINDOW = 2 * 3600
 -- Indicator settings. A moving average needs `period` points before its first value, so a line needs
 -- period + 1. The periods are modest because Auction House history is sparse (the textbook Bollinger
 -- period of 20 would rarely be available).
@@ -36,7 +38,7 @@ PriceChart.TIMEFRAMES = TIMEFRAMES
 
 --- Help topics the window attaches to its widgets (checked by tests against Core/HelpTopics.lua).
 PriceChart.HELP_KEYS = {
-    "timeframe-1D", "timeframe-1W", "timeframe-1M", "sma", "bollinger", "tutorial", "change-scan",
+    "timeframe-1D", "timeframe-1W", "timeframe-1M", "sma", "bollinger", "tutorial", "change-recent",
 }
 
 local function timeframe(key)
@@ -184,37 +186,43 @@ end
 
 --- The numbers the header shows: { price, min, change (24h percent), age (seconds) }; nil when the
 --- item has no reading.
-function PriceChart.HeaderParts(store, itemID, now)
+function PriceChart.HeaderParts(store, itemID, now, key)
     local last = store:Latest(itemID)
     if not last then return nil end
+    local tf = timeframe(key or "1D")
+    local change, covered = store:ChangeOver(itemID, tf.span, now)
+    -- Say how long the move really covers when there is less history than the scope: "+3% 4d", not "+3% 30d".
+    local label = tf.label
+    if change and covered < tf.span * 0.9 then label = Format.Span(covered) end
     return {
-        price = last.price, min = last.min, change = store:Change(itemID, 86400, now),
-        scan = store:ScanChange(itemID), age = now - last.ts,
+        price = last.price, min = last.min, age = now - last.ts,
+        recent = (store:SmoothedChange(itemID, RECENT_WINDOW)),
+        change = change, changeLabel = label,
     }
 end
 
 --- Plain one-line summary: "Linen Cloth  1g 20s (24h +3.10%)  updated 12m ago". `name` may carry colour codes.
-function PriceChart.Header(store, itemID, now, name)
-    local p = PriceChart.HeaderParts(store, itemID, now)
+function PriceChart.Header(store, itemID, now, name, key)
+    local p = PriceChart.HeaderParts(store, itemID, now, key)
     if not p then return name .. "  (no data)" end
     local line = ("%s  %s"):format(name, Format.Money(p.price))
-    if p.change then line = line .. "  (24h " .. Format.Percent(p.change) .. ")" end
+    if p.change then line = line .. "  (" .. p.changeLabel .. " " .. Format.Percent(p.change) .. ")" end
     return line .. "  updated " .. Format.Age(p.age)
 end
 
 --- The text after the price: "+3.10% 24h  updated 12m ago", the change coloured green or red.
 function PriceChart.MetaText(parts)
     local pieces = {}
-    if parts.change then pieces[#pieces + 1] = Format.Change(parts.change) .. " 24h" end
+    if parts.change then pieces[#pieces + 1] = Format.Change(parts.change) .. " " .. (parts.changeLabel or "24h") end
     pieces[#pieces + 1] = "updated " .. Format.Age(parts.age)
     return table.concat(pieces, "   ")
 end
 
 --- The header text after the price, fullest first, for a panel to pick from by the room it has:
---- "+3.10% 24h   updated 12m ago", then just "+3.10% 24h" (when there is a 24h move), then nothing.
+--- "+3.10% 7d   updated 12m ago", then just "+3.10% 7d" (when there is a move over the scope), then nothing.
 function PriceChart.MetaChoices(parts)
     local choices = { PriceChart.MetaText(parts) }
-    if parts.change then choices[#choices + 1] = Format.Change(parts.change) .. " 24h" end
+    if parts.change then choices[#choices + 1] = Format.Change(parts.change) .. " " .. (parts.changeLabel or "24h") end
     choices[#choices + 1] = ""
     return choices
 end

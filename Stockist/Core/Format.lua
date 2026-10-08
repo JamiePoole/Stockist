@@ -88,6 +88,13 @@ function Format.Colored(text, r, g, b)
     return Format.ColorCode(r, g, b) .. text .. "|r"
 end
 
+--- A length of time as one short unit, rounded down so it never claims more than it covers: "45m", "6h", "3d".
+function Format.Span(seconds)
+    if seconds < 3600 then return math.max(1, math.floor(seconds / 60)) .. "m" end
+    if seconds < 2 * 86400 then return math.floor(seconds / 3600) .. "h" end
+    return math.floor(seconds / 86400) .. "d"
+end
+
 --- Seconds ago -> "just now", "12m ago", "3h ago", "2d ago".
 function Format.Age(seconds)
     if seconds < 60 then return "just now" end

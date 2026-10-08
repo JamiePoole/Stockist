@@ -91,15 +91,15 @@ function ChartPanel.Create(parent, opts)
 
     self.priceText = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     self.priceText:SetPoint("LEFT", self.nameText, "RIGHT", 12, 0)
-    -- The move since the previous scan sits right beside the price; hover it for what it means.
-    self.scanText = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    self.scanText:SetPoint("LEFT", self.priceText, "RIGHT", 8, 0)
-    self.scanHit = CreateFrame("Frame", nil, frame)
-    self.scanHit:SetAllPoints(self.scanText)
-    self.scanHit:EnableMouse(true)
-    Stockist.UI.Tooltip.Attach(self.scanHit, "change-scan")
+    -- The recent move sits right beside the price; hover it for what it means.
+    self.recentText = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    self.recentText:SetPoint("LEFT", self.priceText, "RIGHT", 8, 0)
+    self.recentHit = CreateFrame("Frame", nil, frame)
+    self.recentHit:SetAllPoints(self.recentText)
+    self.recentHit:EnableMouse(true)
+    Stockist.UI.Tooltip.Attach(self.recentHit, "change-recent")
     self.metaText = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    self.metaText:SetPoint("LEFT", self.scanText, "RIGHT", 12, 0)
+    self.metaText:SetPoint("LEFT", self.recentText, "RIGHT", 12, 0)
 
     -- Controls, right to left: pop out | time scope buttons | divider | chart overlays.
     local prev
@@ -317,14 +317,14 @@ function ChartPanel:ShadeDots(alpha)
     for _, dot in ipairs(self.dots) do dot:SetColorTexture(0.6, 0.8, 1, alpha) end
 end
 
---- Fit the header (name, price, move since the last scan, and the "24h / updated" text) into the room left
---- of the buttons. What gives way first: the "updated ..." text, then the 24h move, then the item name,
+--- Fit the header (name, price, recent move, and the "scope change / updated" text) into the room left
+--- of the buttons. What gives way first: the "updated ..." text, then the scope change, then the item name,
 --- which is cut off with "..." (hover it for the full name). The price and the scan move are never cut.
 --- A message such as "no data yet" outranks the name. Runs again whenever the text or the size changes.
 function ChartPanel:LayoutHeader()
     local width = self.frame:GetWidth()
     local natural = self.nameText:GetStringWidth()
-    local price, scan = self.priceText:GetStringWidth(), self.scanText:GetStringWidth()
+    local price, scan = self.priceText:GetStringWidth(), self.recentText:GetStringWidth()
     local fixed = (price > 0 and (12 + price) or 0) + (scan > 0 and ((price > 0 and 8 or 12) + scan) or 0) -- with their gaps
     local room = width - self.controlsWidth - HEADER_MARGIN
     local choices = self.metaChoices
@@ -333,10 +333,10 @@ function ChartPanel:LayoutHeader()
     -- pieces that are shown are exactly the ones counted below.
     self.priceText:ClearAllPoints()
     self.priceText:SetPoint("LEFT", self.nameText, "RIGHT", 12, 0)
-    self.scanText:ClearAllPoints()
-    self.scanText:SetPoint("LEFT", price > 0 and self.priceText or self.nameText, "RIGHT", price > 0 and 8 or 12, 0)
+    self.recentText:ClearAllPoints()
+    self.recentText:SetPoint("LEFT", price > 0 and self.priceText or self.nameText, "RIGHT", price > 0 and 8 or 12, 0)
     self.metaText:ClearAllPoints()
-    self.metaText:SetPoint("LEFT", scan > 0 and self.scanText or (price > 0 and self.priceText or self.nameText),
+    self.metaText:SetPoint("LEFT", scan > 0 and self.recentText or (price > 0 and self.priceText or self.nameText),
         "RIGHT", 12, 0)
 
     local chosen, meta = choices[1], 0
@@ -383,7 +383,7 @@ function ChartPanel:ShowStatus(status)
         self.metaKeep = true -- the reason there is no chart: the name gives way before this does
     end
     self.priceText:SetText("")
-    self.scanText:SetText("")
+    self.recentText:SetText("")
     self:LayoutHeader()
     self:UpdateTitle()
 
@@ -434,9 +434,9 @@ function ChartPanel:Refresh()
     self.available = config.indicators
 
     self.nameText:SetText(Stockist.ItemInfo.ColoredName(state.itemID))
-    local parts = PriceChart.HeaderParts(Stockist.store, state.itemID, now)
+    local parts = PriceChart.HeaderParts(Stockist.store, state.itemID, now, state.timeframe)
     self.priceText:SetText(parts and Format.MoneyDisplay(parts.price) or "")
-    self.scanText:SetText(parts and Format.Change(parts.scan) or "")
+    self.recentText:SetText(parts and Format.Change(parts.recent) or "")
     self.metaChoices = parts and PriceChart.MetaChoices(parts) or { "no data yet" }
     self.metaKeep = parts == nil
     self:LayoutHeader()

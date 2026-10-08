@@ -410,17 +410,19 @@ test("PriceChart.Show opens one window and reuses it for other items", function(
     Fake.uninstall()
 end)
 
-test("the move since the previous scan sits right beside the price in the header", function()
+test("the recent move sits right beside the price, and the scope's move follows in the meta text", function()
     local S = setup()
     local panel = S.ChartPanel.Create(UIParent)
-    S.store:Add({ item = 11, ts = NOON - 900, price = 1000, qty = 5 })
+    for i = 1, 4 do S.store:Add({ item = 11, ts = NOON - (5 - i) * 900, price = 1000, qty = 5 }) end
     S.store:Add({ item = 11, ts = NOON, price = 1100, qty = 5 })
     panel:SetItem(11)
-    eq(panel.scanText.text:find("+10.00%", 1, true) ~= nil, true, panel.scanText.text)
+    eq(panel.recentText.text:find("+10.00%", 1, true) ~= nil, true, panel.recentText.text)
     panel:SetItem(7)
-    eq(panel.metaText.text:find("24h", 1, true) ~= nil, true, "the 24h move stays in the meta text")
+    eq(panel.metaText.text:find("24h", 1, true) ~= nil, true, "1D scope: the 24h move")
+    panel.state.timeframe = "1W"; panel:Refresh()
+    eq(panel.metaText.text:find("24h", 1, true), nil, "no 24h label under 1W")
     panel:SetItem(9)
-    eq(panel.scanText.text, "", "cleared when there is no data")
+    eq(panel.recentText.text, "", "cleared when there is no data")
     Fake.uninstall()
 end)
 
@@ -429,7 +431,7 @@ end)
 --- Header pieces' widths for item 7, so the tests pick sizes from the measured text, not magic numbers.
 local function headerMeasure(panel)
     local m = { name = panel.nameText:GetStringWidth(), price = panel.priceText:GetStringWidth(),
-        scan = panel.scanText:GetStringWidth() }
+        scan = panel.recentText:GetStringWidth() }
     m.fixed = (m.price > 0 and 12 + m.price or 0) + (m.scan > 0 and ((m.price > 0 and 8 or 12) + m.scan) or 0)
     m.choices = panel.metaChoices
     local function meta(text)

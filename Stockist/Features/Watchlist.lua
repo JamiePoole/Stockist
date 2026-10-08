@@ -59,7 +59,6 @@ function Watchlist.Rows(store, ids, now, nameOf)
             id = id,
             name = nameOf(id),
             price = last and last.price or nil,
-            scan = last and store:ScanChange(id) or nil,
             change = last and store:Change(id, 86400, now) or nil,
             age = last and (now - last.ts) or nil,
             spark = last and sparkPoints(store, id, now) or {},
@@ -112,10 +111,8 @@ local function buildRow(self, parent)
     row.name:SetWordWrap(false)
     row.price = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     row.price:SetPoint("BOTTOMLEFT", 8, 5)
-    row.scan = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall") -- move since the last scan, beside the price
-    row.scan:SetPoint("LEFT", row.price, "RIGHT", 6, 0)
-    row.change = row:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall") -- 24h, quieter
-    row.change:SetPoint("LEFT", row.scan, "RIGHT", 6, 0)
+    row.change = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall") -- the 24h move, beside the price
+    row.change:SetPoint("LEFT", row.price, "RIGHT", 8, 0)
 
     row:SetScript("OnEnter", function(r)
         r.hoverBg:Show()
@@ -291,7 +288,6 @@ function Watchlist:Refresh()
                 row.itemID = data.id
                 row.name:SetText(Stockist.ItemInfo.ColoredName(data.id))
                 row.price:SetText(data.price and Format.MoneyDisplay(data.price) or "no data yet")
-                row.scan:SetText(Format.Change(data.scan))
                 row.change:SetText(data.change and (Format.Change(data.change) .. " 24h") or "")
                 row.spark:SetConfig(Watchlist.SparkConfig(data.spark))
                 row.selectedBg:SetShown(data.id == selected)
