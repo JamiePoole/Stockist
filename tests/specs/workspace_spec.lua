@@ -325,7 +325,8 @@ test("windows are top-level and raise themselves when shown, so a pop-out sits o
     for _, name in ipairs({ "StockistWorkspace", "StockistChartWindow" }) do
         local win = _G[name]
         eq(Fake.called(win, "SetToplevel"), true, name .. " is top-level")
-        eq(Fake.called(win, "Raise"), false, "nothing raised yet in the stand-in client")
+        -- the pop-out is also raised explicitly by PopOut.Open; the workspace only by its OnShow
+        eq(Fake.called(win, "Raise"), name == "StockistChartWindow", name)
         Fake.fire(win, "OnShow")
         eq(Fake.called(win, "Raise"), true, name .. " raises itself when shown")
     end

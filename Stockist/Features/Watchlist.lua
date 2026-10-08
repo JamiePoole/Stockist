@@ -187,7 +187,14 @@ function Watchlist.Create(parent, opts)
     self.trackButton:SetScript("OnClick", function() self:ToggleSelected() end)
     Stockist.UI.Tooltip.Attach(self.trackButton, "watchlist-track")
 
-    local function refresh() if frame:IsVisible() then self:Refresh() end end
+    -- A panel that is not on screen skips redrawing, but remembers it missed something (a name that arrived,
+    -- a scan) and catches up the moment it is shown again.
+    local function refresh()
+        if frame:IsVisible() then self:Refresh() else self.stale = true end
+    end
+    frame:HookScript("OnShow", function()
+        if self.stale then self.stale = false; self:Refresh() end
+    end)
     self.list:SetScript("OnSizeChanged", refresh) -- how many rows fit depends on the list height
     Stockist.Events:On("TRACKED_CHANGED", refresh, self)
     Stockist.Events:On("SCAN_COMPLETE", refresh, self)

@@ -71,6 +71,7 @@ function PopOut.Open(typeName, opts)
     if slot.panel.Apply then slot.panel:Apply(opts or {}) end
     updateTitle(slot)
     slot.win.frame:Show()
+    slot.win.frame:Raise() -- also when it was already open, perhaps buried under other windows
     -- Sizes are only known after the first layout pass, so give the panel one more chance to fit itself.
     C_Timer.After(0, function()
         if slot.win.frame:IsShown() and slot.panel.LayoutChart then slot.panel:LayoutChart() end

@@ -193,6 +193,15 @@ function ChartPanel.Create(parent, opts)
         if self.state.itemID then self:LayoutChart() end
     end)
 
+    -- A panel that is not on screen skips redrawing, but remembers it missed something (a name that arrived,
+    -- a scan) and catches up the moment it is shown again.
+    local function refreshIfVisible()
+        if frame:IsVisible() then self:Refresh() else self.stale = true end
+    end
+    frame:HookScript("OnShow", function()
+        if self.stale then self.stale = false; self:Refresh() end
+    end)
+
     -- Item names arrive from the server a moment after the first request.
     -- A load that fails means the item does not exist, which turns the panel into "Item not found".
     local loader = CreateFrame("Frame")
@@ -200,15 +209,11 @@ function ChartPanel.Create(parent, opts)
     loader:RegisterEvent("ITEM_DATA_LOAD_RESULT")
     loader:SetScript("OnEvent", function(_, event, itemID, success)
         if event == "ITEM_DATA_LOAD_RESULT" then Stockist.ItemInfo.NoteLoadResult(itemID, success) end
-        if frame:IsVisible() and itemID == self.state.itemID then self:Refresh() end
+        if itemID == self.state.itemID then refreshIfVisible() end
     end)
 
-    Stockist.Events:On("SCAN_COMPLETE", function()
-        if frame:IsVisible() then self:Refresh() end
-    end, self)
-    Stockist.Events:On("TUTORIAL_CHANGED", function()
-        if frame:IsVisible() then self:Refresh() end
-    end, self)
+    Stockist.Events:On("SCAN_COMPLETE", refreshIfVisible, self)
+    Stockist.Events:On("TUTORIAL_CHANGED", refreshIfVisible, self)
 
     Stockist.Events:On("LINK_SELECTED", function(group, itemID)
         if self.link and group == self.link and itemID ~= self.state.itemID then self:SetItem(itemID) end

@@ -208,3 +208,66 @@ test("/stockist chart and the chart panel's pop-out button share the one chart p
     eq(S.PriceChart.PopOutPanel(), slot.panel)
     Fake.uninstall()
 end)
+
+local function raises(slot)
+    local n = 0
+    for _, c in ipairs(slot.win.frame.calls) do if c == "Raise" then n = n + 1 end end
+    return n
+end
+
+test("popping out brings the window to the front, also when it is already open", function()
+    local S = setup()
+    local slot = S.PopOut.Open("chart", { itemID = 7 })
+    eq(raises(slot), 1, "raised when first opened")
+    S.PopOut.Open("chart", { itemID = 8 })
+    eq(raises(slot), 2, "and again when asked for while already open")
+    slot.win.frame:Hide()
+    S.PopOut.Open("chart", { itemID = 9 })
+    eq(raises(slot), 3, "and when reopened")
+    local other = S.PopOut.Open("watchlist")
+    eq(raises(other), 1)
+    eq(raises(slot), 3, "raising one does not touch another")
+    Fake.uninstall()
+end)
+
+test("a hidden panel that missed an item name catches up as soon as it is shown", function()
+    local S = setup()
+    local names = {}
+    S.ItemInfo.Name = function(id) return names[id] end
+    local panel = S.Watchlist.Create(UIParent, { link = "A" })
+    panel.list:SetSize(220, 300); panel:Refresh()
+    local function firstRowName()
+        for _, row in ipairs(panel.rowFrames) do if row.itemID == 7 then return row.name.text end end
+    end
+    eq(firstRowName(), "item:7", "not cached yet")
+
+    panel.frame.shown = false -- not on screen when the name arrives
+    names[7] = "Linen Cloth"
+    for _, o in ipairs(Fake.objects) do
+        if o.events and o.events["GET_ITEM_INFO_RECEIVED"] then Fake.fire(o, "OnEvent", "GET_ITEM_INFO_RECEIVED", 7, true) end
+    end
+    eq(firstRowName(), "item:7", "a hidden panel does not redraw")
+    panel.frame.shown = true
+    Fake.fire(panel.frame, "OnShow")
+    eq(firstRowName(), "Linen Cloth", "but catches up when shown")
+    Fake.uninstall()
+end)
+
+test("a hidden chart panel also catches up when shown", function()
+    local S = setup()
+    local names = {}
+    S.ItemInfo.Name = function(id) return names[id] end
+    local panel = S.ChartPanel.Create(UIParent)
+    panel:SetItem(7)
+    eq(panel.nameText.text, "item:7")
+    panel.frame.shown = false
+    names[7] = "Linen Cloth"
+    for _, o in ipairs(Fake.objects) do
+        if o.events and o.events["GET_ITEM_INFO_RECEIVED"] then Fake.fire(o, "OnEvent", "GET_ITEM_INFO_RECEIVED", 7, true) end
+    end
+    eq(panel.nameText.text, "item:7")
+    panel.frame.shown = true
+    Fake.fire(panel.frame, "OnShow")
+    eq(panel.nameText.text, "Linen Cloth")
+    Fake.uninstall()
+end)
