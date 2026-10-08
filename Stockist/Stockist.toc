@@ -8,4 +8,15 @@
 ## X-Curse-Project-ID:
 
 Core\Version.lua
+Core\Config.lua
+Core\Clock.lua
+Core\EventBus.lua
+Core\Registry.lua
+Core\Format.lua
+Data\Rollup.lua
+Data\Indicators.lua
+Data\ReadingStore.lua
+Market\Aggregate.lua
+Market\AuctionScanner.lua
+Features\Slash.lua
 Core\Bootstrap.lua

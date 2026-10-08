@@ -1,0 +1,137 @@
+local ADDON_NAME, Stockist = ...
+
+-- Adapter between the game's Auction House API and the rest of the addon. Everything that touches
+-- C_AuctionHouse lives here, so the data layer never sees a game call.
+--
+-- Flow (same shape as Auctionator's full scan on this client):
+--   AUCTION_HOUSE_SHOW -> ReplicateItems() -> REPLICATE_ITEM_LIST_UPDATE -> read every auction in
+--   batches -> keep trade goods -> reduce each item's tiers -> store one reading per item.
+--
+-- GetReplicateItemInfo(i) returns (positions we use): 3 = count, 10 = buyoutPrice, 17 = itemID.
+-- The server allows a replicate about every 15 minutes (Config.scan.minIntervalSec).
+local Aggregate = Stockist.Aggregate
+
+local Scanner = { inProgress = false, ahOpen = false }
+Stockist.Scanner = Scanner
+
+local BATCH = 500
+local TRADE_GOODS = (Enum and Enum.ItemClass and Enum.ItemClass.Tradegoods) or 7
+
+function Scanner:SecondsUntilNextScan()
+    local last = Stockist.db.scan.last or 0
+    return math.max(0, last + Stockist.Config.scan.minIntervalSec - Stockist.Clock.now())
+end
+
+--- Begin a scan. Returns true, or false plus a human-readable reason.
+function Scanner:Start()
+    if self.inProgress then return false, "a scan is already running" end
+    if not self.ahOpen then return false, "open the Auction House first" end
+    local wait = self:SecondsUntilNextScan()
+    if wait > 0 then
+        return false, ("next scan available in %d:%02d"):format(math.floor(wait / 60), wait % 60)
+    end
+    self.inProgress = true
+    self.frame:RegisterEvent("REPLICATE_ITEM_LIST_UPDATE")
+    C_AuctionHouse.ReplicateItems()
+    Stockist.Events:Fire("SCAN_STARTED")
+    return true
+end
+
+function Scanner:Abort(reason)
+    if not self.inProgress then return end
+    self.inProgress = false
+    self.frame:UnregisterEvent("REPLICATE_ITEM_LIST_UPDATE")
+    Stockist.Events:Fire("SCAN_FAILED", reason)
+end
+
+local classCache = {}
+local function itemClass(itemID)
+    local cached = classCache[itemID]
+    if cached then return cached[1], cached[2] end
+    local info = C_Item and C_Item.GetItemInfoInstant or GetItemInfoInstant
+    local _, _, _, _, _, classID, subClassID = info(itemID)
+    if classID then classCache[itemID] = { classID, subClassID } end
+    return classID, subClassID
+end
+
+function Scanner:Finish(tiersByItem, classes)
+    local cfg = Stockist.Config.scan
+    local now = Stockist.Clock.now()
+    local recorded = 0
+    for itemID, tiers in pairs(tiersByItem) do
+        local agg = Aggregate.Reduce(tiers, cfg.cheapestUnits)
+        if agg and Stockist.store:Add({
+            item = itemID, ts = now, price = agg.median, min = agg.min, qty = agg.qty,
+        }) then
+            recorded = recorded + 1
+            local c = classes[itemID]
+            if c then Stockist.store:SetMeta(itemID, c[1], c[2]) end
+        end
+    end
+    Stockist.db.scan.last = now
+    Stockist.db.scan.items = recorded
+    self.inProgress = false
+    Stockist.Events:Fire("SCAN_COMPLETE", recorded, now)
+end
+
+--- Walk the replicate list in batches so the client does not stall.
+function Scanner:Collect()
+    local total = C_AuctionHouse.GetNumReplicateItems()
+    local tiersByItem, classes = {}, {}
+    local index = 0
+
+    local function step()
+        if not self.inProgress then return end
+        local stop = math.min(index + BATCH, total)
+        local ok, err = pcall(function()
+            while index < stop do
+                local _, _, count, _, _, _, _, _, _, buyout, _, _, _, _, _, _, itemID =
+                    C_AuctionHouse.GetReplicateItemInfo(index)
+                index = index + 1
+                if itemID and itemID > 0 and count and count > 0 and buyout and buyout > 0 then
+                    local classID, subClassID = itemClass(itemID)
+                    if classID == TRADE_GOODS then
+                        local list = tiersByItem[itemID]
+                        if not list then
+                            list = {}
+                            tiersByItem[itemID] = list
+                            classes[itemID] = { classID, subClassID }
+                        end
+                        list[#list + 1] = { price = buyout / count, qty = count }
+                    end
+                end
+            end
+        end)
+        if not ok then
+            return self:Abort("error reading auctions: " .. tostring(err))
+        end
+        if index >= total then
+            self:Finish(tiersByItem, classes)
+        else
+            C_Timer.After(0, step)
+        end
+    end
+    step()
+end
+
+local frame = CreateFrame("Frame")
+Scanner.frame = frame
+frame:RegisterEvent("AUCTION_HOUSE_SHOW")
+frame:RegisterEvent("AUCTION_HOUSE_CLOSED")
+frame:SetScript("OnEvent", function(_, event)
+    if event == "AUCTION_HOUSE_SHOW" then
+        Scanner.ahOpen = true
+        Stockist.Events:Fire("AH_OPENED")
+        if Stockist.Config.scan.autoOnOpen and Stockist.db then
+            local ok, reason = Scanner:Start()
+            if not ok then Stockist.Events:Fire("SCAN_SKIPPED", reason) end
+        end
+    elseif event == "AUCTION_HOUSE_CLOSED" then
+        Scanner.ahOpen = false
+        Stockist.Events:Fire("AH_CLOSED")
+        Scanner:Abort("Auction House closed during the scan")
+    elseif event == "REPLICATE_ITEM_LIST_UPDATE" then
+        frame:UnregisterEvent("REPLICATE_ITEM_LIST_UPDATE")
+        Scanner:Collect()
+    end
+end)
