@@ -19,7 +19,7 @@ Stockist.UI = UI
 local Button = {}
 UI.Button = Button
 
-local BLUE = { 0.10, 0.36, 0.85, 0.5 } -- added to the grey art; alpha is how strongly
+local BLUE = { 0.10, 0.36, 0.85, 0.65 } -- added to the grey art; alpha is how strongly
 local INSET_X, INSET_Y = 4, 3          -- the layers stay inside the border
 local VIGNETTE_SIDE = { width = 0.30, darkness = 0.55 }   -- left and right fades: fraction of width, strength at the edge
 local VIGNETTE_CAP = { height = 0.38, darkness = 0.40 }   -- top and bottom fades

@@ -127,7 +127,7 @@ test("the selected button has a gentle blue layer and a vignette that darkens th
     local glow = btn.selectedGlow
 
     eq(glow.blendMode, "ADD")
-    eq(glow.color[4] <= 0.6, true, "gentle: the art's own shading shows through (not 90% flat)")
+    eq(glow.color[4] > 0.5 and glow.color[4] <= 0.7, true, "bright but not flat: the art's own shading still shows through (not 90%)")
     eq(#btn.selectedLayers, 5, "the blue layer and four vignette fades")
 
     local horizontal, vertical = 0, 0
