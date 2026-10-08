@@ -96,6 +96,10 @@ function Window.Create(opts)
     local help = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
     help:SetSize(CONTROL_HEIGHT, CONTROL_HEIGHT)
     help:SetPoint("RIGHT", close, "LEFT", -4, 0)
+    -- A long title is cut off with "..." before it reaches the buttons.
+    title:SetPoint("RIGHT", help, "LEFT", -8, 0)
+    title:SetJustifyH("LEFT")
+    title:SetWordWrap(false)
     help:SetText("?")
     -- Bold, to stand up next to the close button's artwork: the outline thickens the strokes.
     local face, size = help:GetFontString():GetFont()

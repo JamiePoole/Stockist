@@ -218,9 +218,35 @@ function ChartPanel.Create(parent, opts)
     return self
 end
 
---- Open this panel's item in its own window (the panel stays where it is).
+--- Open this panel's item in a window of its own (the panel stays where it is). The window starts with the same
+--- scope and indicators, then goes its own way: it is not linked to anything.
 function ChartPanel:PopOut()
-    if self.state.itemID then Stockist.PriceChart.Show(self.state.itemID) end
+    if not self.state.itemID then return end
+    Stockist.PopOut.Open("chart", {
+        itemID = self.state.itemID, timeframe = self.state.timeframe,
+        indicators = { sma = self.state.indicators.sma, bollinger = self.state.indicators.bollinger },
+    })
+end
+
+--- Take the options a pop-out window is opened with.
+function ChartPanel:Apply(opts)
+    if opts.timeframe then self.state.timeframe = opts.timeframe end
+    if opts.indicators then
+        self.state.indicators = { sma = opts.indicators.sma, bollinger = opts.indicators.bollinger }
+    end
+    self.link = opts.link
+    if opts.itemID then self:SetItem(opts.itemID) else self:Refresh() end
+end
+
+--- The window title for this panel: "Linen Cloth (Price chart)", or just "Price chart" with no item.
+function ChartPanel:Title()
+    local id = self.state.itemID
+    if not id then return "Price chart" end
+    return ("%s (Price chart)"):format(Stockist.ItemInfo.Name(id) or ("item:" .. id))
+end
+
+function ChartPanel:UpdateTitle()
+    if self.onTitle then self.onTitle(self:Title()) end
 end
 
 --- The player chose an item (from the picker): select it for the whole link group, or just here if unlinked.
@@ -354,6 +380,7 @@ function ChartPanel:ShowStatus(status)
     self.priceText:SetText("")
     self.scanText:SetText("")
     self:LayoutHeader()
+    self:UpdateTitle()
 
     local Tooltip = Stockist.UI.Tooltip
     for _, btn in pairs(self.tfButtons) do
@@ -408,6 +435,7 @@ function ChartPanel:Refresh()
     self.metaChoices = parts and PriceChart.MetaChoices(parts) or { "no data yet" }
     self.metaKeep = parts == nil
     self:LayoutHeader()
+    self:UpdateTitle()
 
     local Tooltip = Stockist.UI.Tooltip
     -- The active scope is shown as selected (blue), not disabled: it is simply the one in use.
@@ -434,4 +462,7 @@ function ChartPanel:Destroy()
     self.frame:Hide()
 end
 
-Stockist.Panels:Register("chart", { title = "Price chart", create = ChartPanel.Create })
+Stockist.Panels:Register("chart", {
+    title = "Price chart", create = ChartPanel.Create,
+    popout = { width = 680, height = 520, minWidth = 520, minHeight = 420 },
+})
