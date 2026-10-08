@@ -373,7 +373,7 @@ test("the workspace has a search box in its title bar; focusing it opens just th
     local search = titleSearch()
     eq(search ~= nil, true, "a search box in the title bar")
     eq(search.size[2], 24, "as tall as the header buttons")
-    eq(search.points[1][5], -3, "a little below the top edge of the window")
+    eq(search.points[1][1], "CENTER", "centred in the title bar, both ways")
     Fake.fire(search, "OnEditFocusGained")
     eq(S.ItemPicker.IsShown(), true)
     local ui = S.ItemPicker._debug()
