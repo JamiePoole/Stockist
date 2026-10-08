@@ -34,3 +34,22 @@ function Tooltip.Attach(frame, key, extra)
     frame:HookScript("OnEnter", function(self) show(self, key, extra) end)
     frame:HookScript("OnLeave", function() GameTooltip:Hide() end)
 end
+
+--- Enable or disable a button while keeping its tooltip working. A normally disabled button stops
+--- sending hover events, so there would be no tooltip to say why it is disabled. Where the client
+--- allows hover while disabled we use a real disabled button; otherwise we fake it (greyed out,
+--- still hoverable) and click handlers must ask Tooltip.IsAvailable.
+function Tooltip.SetAvailable(button, available)
+    if button.SetMotionScriptsWhileDisabled then
+        button:SetMotionScriptsWhileDisabled(true)
+        button:SetEnabled(available)
+        button.stockistUnavailable = nil
+    else
+        button.stockistUnavailable = not available
+        button:SetAlpha(available and 1 or 0.5)
+    end
+end
+
+function Tooltip.IsAvailable(button)
+    return not button.stockistUnavailable and button:IsEnabled()
+end

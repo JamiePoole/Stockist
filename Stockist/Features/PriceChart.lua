@@ -212,10 +212,11 @@ local function refresh()
     priceText:SetText(parts and Format.MoneyDisplay(parts.price) or "")
     metaText:SetText(parts and PriceChart.MetaText(parts) or "no data yet")
 
-    for key, btn in pairs(tfButtons) do btn:SetEnabled(key ~= state.timeframe) end
+    local Tooltip = Stockist.UI.Tooltip
+    for key, btn in pairs(tfButtons) do Tooltip.SetAvailable(btn, key ~= state.timeframe) end
     for key, btn in pairs(toggleButtons) do
         local ok = available[key].ok
-        btn:SetEnabled(ok)
+        Tooltip.SetAvailable(btn, ok) -- a disabled button keeps its tooltip, which says why
         paintToggle(btn, state.indicators[key], ok)
     end
 
@@ -296,7 +297,8 @@ local function createWindow()
     for _, def in ipairs({ { "bollinger", "BB", "bollinger" }, { "sma", "SMA", "sma" } }) do
         local b = button(content, def[2], 40, def[3], whyDisabled(def[1]))
         b:SetPoint("RIGHT", prev, "LEFT", -7, 0)
-        b:SetScript("OnClick", function()
+        b:SetScript("OnClick", function(self)
+            if not Stockist.UI.Tooltip.IsAvailable(self) then return end
             state.indicators[def[1]] = not state.indicators[def[1]]
             refresh()
         end)
