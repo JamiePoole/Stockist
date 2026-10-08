@@ -10,14 +10,19 @@ Stockist.PriceChart = PriceChart
 
 -- `prefer` lists the data kinds to try, best first: "ticks" (one point per scan), "hourly" and
 -- "daily" candles. The first kind with at least MIN_POINTS points is used, so a young data set
--- falls back to finer detail instead of showing a single mark. The axis always covers a whole
--- calendar period in local time (see Window): today, this Monday-to-Sunday week, this month.
+-- falls back to finer detail instead of showing a single mark. The scopes are rolling windows that
+-- end now (the last 24 hours, 7 days, 30 days), as on any chart for a market that never closes.
 -- Not offered yet: ALL (everything stored); see docs/ROADMAP.md.
 local TIMEFRAMES = {
-    { key = "1D", prefer = { "hourly", "ticks" } },
-    { key = "1W", prefer = { "hourly", "ticks" } },
-    { key = "1M", prefer = { "daily", "hourly", "ticks" } },
+    { key = "1D", span = 86400, prefer = { "hourly", "ticks" } },
+    { key = "1W", span = 7 * 86400, prefer = { "hourly", "ticks" } },
+    { key = "1M", span = 30 * 86400, prefer = { "daily", "hourly", "ticks" } },
 }
+-- Indicator settings. A moving average needs `period` points before its first value, so a line needs
+-- period + 1. The periods are modest because Auction House history is sparse (the textbook Bollinger
+-- period of 20 would rarely be available).
+local SMA_PERIOD, BOLLINGER_PERIOD, BOLLINGER_K = 7, 10, 2
+local FORWARD_MARGIN = 0.03 -- empty space after "now", as a fraction of the window
 local MIN_POINTS = 3
 local RESOLUTION = { ticks = 60, hourly = 3600, daily = 86400 }
 local KIND_NAME = { ticks = "one point per scan", hourly = "hourly candles", daily = "daily candles" }
@@ -58,34 +63,36 @@ local function seriesFor(store, itemID, kind, fromTs)
     return { price = { type = "candle", id = "price", points = points }, supply = supply, count = #points }
 end
 
---- The calendar window a scope covers, in local time, including the part that has not happened yet:
---- start, end, and the axis tick times.
----   1D  today, midnight to midnight, ticks every 3 hours
----   1W  this week, Monday to Sunday, a tick at each midnight
----   1M  this month, the 1st to the last day, ticks on the 1st, 8th, 15th, 22nd and 29th
+--- The rolling window a scope covers: start, end and the axis tick times. The window ends a little
+--- after `now` (FORWARD_MARGIN) so the newest candle does not sit on the edge. Ticks fall on round
+--- local times:
+---   1D  every 3 hours (00:00, 03:00 ...)
+---   1W  every local midnight
+---   1M  every Monday midnight
 function PriceChart.Window(key, now, tz)
     local Calendar = Stockist.Calendar
+    local tf = timeframe(key)
+    local from = now - tf.span
+    local to = now + math.floor(tf.span * FORWARD_MARGIN)
     local ticks = {}
-    if key == "1D" then
-        local s, e = Calendar.DayRange(now, tz)
-        for t = s, e - 1, 3 * 3600 do ticks[#ticks + 1] = t end
-        return s, e, ticks
-    elseif key == "1W" then
-        local s, e = Calendar.WeekRange(now, tz)
-        for t = s, e - 1, 86400 do ticks[#ticks + 1] = t end
-        return s, e, ticks
+    if tf.key == "1D" then
+        for t = Calendar.NextBoundary(from, 3 * 3600, tz), to, 3 * 3600 do ticks[#ticks + 1] = t end
+    elseif tf.key == "1W" then
+        for t = Calendar.NextBoundary(from, 86400, tz), to, 86400 do ticks[#ticks + 1] = t end
+    else
+        local monday = Calendar.WeekStart(from, tz)
+        if monday < from then monday = monday + 7 * 86400 end
+        for t = monday, to, 7 * 86400 do ticks[#ticks + 1] = t end
     end
-    local s, e, days = Calendar.MonthRange(now, tz)
-    for day = 1, days, 7 do ticks[#ticks + 1] = s + (day - 1) * 86400 end
-    return s, e, ticks
+    return from, to, ticks
 end
 
 --- Chart config for an item.
 ---   indicators = { sma = bool, bollinger = bool }
---- The x axis always covers the whole calendar window for the scope (see Window), so readings sit at
---- their real position in the day, week or month. Each view prefers one kind of data (see TIMEFRAMES)
---- and falls back to a finer kind while it has fewer than MIN_POINTS points. Anything the chart cannot
---- do yet (a fallback, an indicator without enough data) is explained in a corner note.
+--- The x axis is the scope's rolling window (see Window). Each view prefers one kind of data (see
+--- TIMEFRAMES) and falls back to a finer kind while it has fewer than MIN_POINTS points; a corner note
+--- says so. The result also carries `indicators`, saying for each one how many points it needs and
+--- has, so the window can disable a button that could not draw anything.
 function PriceChart.BuildConfig(store, itemID, key, indicators, now, tzOffset)
     local tf = timeframe(key)
     tzOffset = tzOffset or 0
@@ -105,28 +112,25 @@ function PriceChart.BuildConfig(store, itemID, key, indicators, now, tzOffset)
             KIND_NAME[tf.prefer[1]], KIND_NAME[chosenKind])
     end
 
-    -- Indicators scale to the data we have: a 7-point average needs 8 points, so with less we shorten
-    -- it, and with fewer than 3 points there is nothing to average at all.
+    -- An indicator is only drawn when the view has enough points for it. Whether the player switched
+    -- it on is remembered separately, so it comes back by itself once the data is there.
+    local n = chosen.count
+    local available = {
+        sma = { need = SMA_PERIOD + 1, have = n, ok = n >= SMA_PERIOD + 1 },
+        bollinger = { need = BOLLINGER_PERIOD + 1, have = n, ok = n >= BOLLINGER_PERIOD + 1 },
+    }
     local overlays = {}
     indicators = indicators or {}
-    local n = chosen.count
-    if indicators.sma then
-        if n >= MIN_POINTS then
-            overlays[#overlays + 1] = { type = "sma", of = "price", period = math.min(7, n - 1) }
-        else
-            notes[#notes + 1] = "SMA needs at least 3 points"
-        end
+    if indicators.sma and available.sma.ok then
+        overlays[#overlays + 1] = { type = "sma", of = "price", period = SMA_PERIOD }
     end
-    if indicators.bollinger then
-        if n >= MIN_POINTS then
-            overlays[#overlays + 1] = { type = "bollinger", of = "price", period = math.min(10, n - 1), k = 2 }
-        else
-            notes[#notes + 1] = "BB needs at least 3 points"
-        end
+    if indicators.bollinger and available.bollinger.ok then
+        overlays[#overlays + 1] = { type = "bollinger", of = "price", period = BOLLINGER_PERIOD, k = BOLLINGER_K }
     end
     local note = #notes > 0 and table.concat(notes, ". ") or nil
 
     return {
+        indicators = available,
         transparent = true, -- the window supplies the background
         x = {
             format = "time", tzOffset = tzOffset, resolution = RESOLUTION[chosenKind],
@@ -183,9 +187,13 @@ end
 local state = { itemID = nil, timeframe = "1D", indicators = { sma = true, bollinger = false } }
 local win, chart, nameText, nameHit, priceText, metaText, legend, tfButtons, toggleButtons
 
-local function paintToggle(btn, on)
+local available = {} -- indicator availability for the chart on screen, set by refresh
+
+local function paintToggle(btn, on, enabled)
     local fs = btn:GetFontString()
-    if on then fs:SetTextColor(0.3, 1, 0.5) else fs:SetTextColor(1, 0.82, 0) end
+    if not enabled then fs:SetTextColor(0.5, 0.5, 0.5)
+    elseif on then fs:SetTextColor(0.3, 1, 0.5)
+    else fs:SetTextColor(1, 0.82, 0) end
 end
 
 local LEGEND_HEIGHT = 30
@@ -193,8 +201,10 @@ local LEGEND_HEIGHT = 30
 local function refresh()
     if not (win and state.itemID and Stockist.store) then return end
     local now = Stockist.Clock.now()
-    chart:SetConfig(PriceChart.BuildConfig(Stockist.store, state.itemID, state.timeframe,
-        state.indicators, now, Stockist.Clock.tzOffset()))
+    local config = PriceChart.BuildConfig(Stockist.store, state.itemID, state.timeframe,
+        state.indicators, now, Stockist.Clock.tzOffset())
+    chart:SetConfig(config)
+    available = config.indicators
 
     nameText:SetText(Stockist.ItemInfo.ColoredName(state.itemID))
     nameHit:SetSize(math.max(1, nameText:GetStringWidth()), math.max(1, nameText:GetStringHeight()))
@@ -203,7 +213,11 @@ local function refresh()
     metaText:SetText(parts and PriceChart.MetaText(parts) or "no data yet")
 
     for key, btn in pairs(tfButtons) do btn:SetEnabled(key ~= state.timeframe) end
-    for key, btn in pairs(toggleButtons) do paintToggle(btn, state.indicators[key]) end
+    for key, btn in pairs(toggleButtons) do
+        local ok = available[key].ok
+        btn:SetEnabled(ok)
+        paintToggle(btn, state.indicators[key], ok)
+    end
 
     -- The legend under the chart is part of tutorial mode (toggled from the window header).
     local tutorial = Stockist.Help.TutorialEnabled()
@@ -215,12 +229,22 @@ local function refresh()
     chart.frame:SetPoint("BOTTOMRIGHT", win.content, "BOTTOMRIGHT", 0, tutorial and LEGEND_HEIGHT + 4 or 0)
 end
 
-local function button(parent, text, width, helpKey)
+local function button(parent, text, width, helpKey, extra)
     local b = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
     b:SetSize(width, 20)
     b:SetText(text)
-    Stockist.UI.Tooltip.Attach(b, helpKey)
+    Stockist.UI.Tooltip.Attach(b, helpKey, extra)
     return b
+end
+
+--- Tooltip line for an indicator button that cannot draw yet.
+local function whyDisabled(key)
+    return function()
+        local a = available[key]
+        if a and not a.ok then
+            return ("Not available in this view yet: it needs at least %d points and this view has %d."):format(a.need, a.have)
+        end
+    end
 end
 
 local function showItemTooltip(owner, itemID)
@@ -270,7 +294,7 @@ local function createWindow()
     divider:SetPoint("RIGHT", prev, "LEFT", -7, 0)
     prev = divider
     for _, def in ipairs({ { "bollinger", "BB", "bollinger" }, { "sma", "SMA", "sma" } }) do
-        local b = button(content, def[2], 40, def[3])
+        local b = button(content, def[2], 40, def[3], whyDisabled(def[1]))
         b:SetPoint("RIGHT", prev, "LEFT", -7, 0)
         b:SetScript("OnClick", function()
             state.indicators[def[1]] = not state.indicators[def[1]]

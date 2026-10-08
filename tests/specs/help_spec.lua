@@ -9,7 +9,7 @@ test("Help returns the long explanation only while tutorial mode is on", functio
     local S = ns()
     S.settings = {}
     local title, short, detail = S.Help.Lines("sma")
-    eq(title, "Moving average (SMA)")
+    eq(title, "Moving average (SMA 7)")
     eq(type(short), "string"); eq(type(detail), "string")
 
     S.Help.SetTutorial(false)
