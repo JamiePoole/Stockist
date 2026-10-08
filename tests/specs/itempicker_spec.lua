@@ -337,16 +337,25 @@ test("dragging the thumb scrolls the list", function()
     Fake.uninstall()
 end)
 
-test("the item name is underlined, brighter under the mouse", function()
+test("the item name has a dotted underline, brighter under the mouse, as wide as the name", function()
     local S = setup()
     local panel = S.ChartPanel.Create(UIParent)
     panel:SetItem(7)
-    local u = panel.nameUnderline
-    eq(u.color[4], 0.35, "a quiet underline at rest")
+    local shown = 0
+    for _, dot in ipairs(panel.dots) do if dot.shown then shown = shown + 1 end end
+    eq(shown, math.floor(panel.nameHit.size[1] / 4), "one dot every 4px across the name")
+    eq(shown > 0, true)
+    eq(panel.dots[1].color[4], 0.5, "quiet at rest")
     Fake.fire(panel.nameHit, "OnEnter")
-    eq(u.color[4], 0.95, "bright on hover")
+    eq(panel.dots[1].color[4], 1, "bright on hover")
     Fake.fire(panel.nameHit, "OnLeave")
-    eq(u.color[4], 0.35)
+    eq(panel.dots[1].color[4], 0.5)
+    -- a shorter name uses fewer dots; the spare ones are hidden, not left hanging
+    S.ItemInfo.ColoredName = function() return "Ab" end
+    panel:Refresh()
+    local after = 0
+    for _, dot in ipairs(panel.dots) do if dot.shown then after = after + 1 end end
+    eq(after < shown, true)
     Fake.uninstall()
 end)
 
@@ -363,6 +372,8 @@ test("the workspace has a search box in its title bar; focusing it opens just th
     S.Workspace.Show()
     local search = titleSearch()
     eq(search ~= nil, true, "a search box in the title bar")
+    eq(search.size[2], 24, "as tall as the header buttons")
+    eq(search.points[1][5], -3, "a little below the top edge of the window")
     Fake.fire(search, "OnEditFocusGained")
     eq(S.ItemPicker.IsShown(), true)
     local ui = S.ItemPicker._debug()

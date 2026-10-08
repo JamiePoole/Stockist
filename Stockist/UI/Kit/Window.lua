@@ -116,8 +116,8 @@ function Window.Create(opts)
     if opts.search then
         search = CreateFrame("EditBox", nil, frame, "InputBoxTemplate")
         search:SetAutoFocus(false)
-        search:SetSize(280, 20)
-        search:SetPoint("TOP", frame, "TOP", 0, -2)
+        search:SetSize(280, 24) -- as tall as the header buttons
+        search:SetPoint("TOP", frame, "TOP", 0, -3)
         search:SetFrameLevel(bar:GetFrameLevel() + 10)
         local placeholder = search:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
         placeholder:SetPoint("LEFT", 2, 0)

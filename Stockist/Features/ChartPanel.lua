@@ -12,7 +12,8 @@ Stockist.ChartPanel = ChartPanel
 
 local LEGEND_GAP = 12 -- empty space between the chart and the legend below it
 local HEADER_MARGIN = 10 -- clear space kept between the header text and the buttons
-local UNDERLINE_REST, UNDERLINE_HOVER = 0.35, 0.95 -- the underline that marks the item name as clickable
+local DOT_STEP = 4                    -- the dotted underline that marks the item name as clickable
+local DOT_REST, DOT_HOVER = 0.5, 1
 
 --- A switch button: coloured while on (and usable), plain while off, greyed text when it cannot be used.
 local function paintToggle(btn, on, enabled)
@@ -69,18 +70,15 @@ function ChartPanel.Create(parent, opts)
     self.nameHit = CreateFrame("Frame", nil, frame)
     self.nameHit:SetPoint("TOPLEFT", self.nameText, "TOPLEFT")
     self.nameHit:EnableMouse(true)
-    -- A thin underline says "this is clickable"; it brightens under the mouse.
-    self.nameUnderline = self.nameHit:CreateTexture(nil, "OVERLAY")
-    self.nameUnderline:SetHeight(1)
-    self.nameUnderline:SetPoint("BOTTOMLEFT", 0, -1)
-    self.nameUnderline:SetPoint("BOTTOMRIGHT", 0, -1)
-    self.nameUnderline:SetColorTexture(0.6, 0.8, 1, UNDERLINE_REST)
+    -- A dotted underline says "this is clickable"; it brightens under the mouse. The dots are small
+    -- textures laid out by PaintDots whenever the name's width changes.
+    self.dots = {}
     self.nameHit:SetScript("OnEnter", function(hit)
-        self.nameUnderline:SetColorTexture(0.6, 0.8, 1, UNDERLINE_HOVER)
+        self:ShadeDots(DOT_HOVER)
         if self.state.itemID and self.statusKind ~= "notfound" then showItemTooltip(hit, self.state.itemID) end
     end)
     self.nameHit:SetScript("OnLeave", function()
-        self.nameUnderline:SetColorTexture(0.6, 0.8, 1, UNDERLINE_REST)
+        self:ShadeDots(DOT_REST)
         GameTooltip:Hide()
     end)
     -- Clicking the name opens the item picker under it.
@@ -255,6 +253,32 @@ function ChartPanel:LayoutChart()
     chartFrame:SetPoint("BOTTOMRIGHT", self.frame, "BOTTOMRIGHT", 0, tutorial and (legendHeight + LEGEND_GAP) or 0)
 end
 
+--- Dots under the item name, one every DOT_STEP pixels across `width`.
+function ChartPanel:PaintDots(width)
+    local count = math.floor(width / DOT_STEP)
+    for i = 1, math.max(count, #self.dots) do
+        local dot = self.dots[i]
+        if i <= count then
+            if not dot then
+                dot = self.nameHit:CreateTexture(nil, "OVERLAY")
+                dot:SetSize(2, 1)
+                self.dots[i] = dot
+            end
+            dot:ClearAllPoints()
+            dot:SetPoint("BOTTOMLEFT", self.nameHit, "BOTTOMLEFT", (i - 1) * DOT_STEP, -1)
+            dot:SetColorTexture(0.6, 0.8, 1, self.dotShade or DOT_REST)
+            dot:Show()
+        elseif dot then
+            dot:Hide()
+        end
+    end
+end
+
+function ChartPanel:ShadeDots(alpha)
+    self.dotShade = alpha
+    for _, dot in ipairs(self.dots) do dot:SetColorTexture(0.6, 0.8, 1, alpha) end
+end
+
 --- Fit the header (name, price, move since the last scan, and the "24h / updated" text) into the room left
 --- of the buttons. What gives way first: the "updated ..." text, then the 24h move, then the item name,
 --- which is cut off with "..." (hover it for the full name). The price and the scan move are never cut.
@@ -299,7 +323,9 @@ function ChartPanel:LayoutHeader()
         nameWidth = room - fixed - meta
     end
     self.nameText:SetWidth(math.max(1, nameWidth))
-    self.nameHit:SetSize(math.max(1, math.min(natural, nameWidth)), math.max(1, self.nameText:GetStringHeight()))
+    local hitWidth = math.max(1, math.min(natural, nameWidth))
+    self.nameHit:SetSize(hitWidth, math.max(1, self.nameText:GetStringHeight()))
+    self:PaintDots(hitWidth)
 end
 
 --- Replace the chart with a message: the item does not exist ("404"), or it exists but has no prices.
