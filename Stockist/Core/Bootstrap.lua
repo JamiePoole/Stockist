@@ -16,6 +16,8 @@ frame:SetScript("OnEvent", function(_, event)
         StockistDB = StockistDB or {}
         StockistDB.schema = StockistDB.schema or SCHEMA_VERSION
         StockistDB.markets = StockistDB.markets or {}
+        StockistDB.settings = StockistDB.settings or {}
+        Stockist.settings = StockistDB.settings
 
         local key = Stockist.MarketKey()
         local market = StockistDB.markets[key]

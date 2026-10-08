@@ -72,6 +72,18 @@ local commands = {
     end,
     item = item,
     movers = movers,
+    auto = function(arg)
+        arg = arg:lower()
+        if arg == "on" then
+            Stockist.settings.autoScan = true
+        elseif arg == "off" then
+            Stockist.settings.autoScan = false
+        elseif arg ~= "" then
+            return say("usage: /stockist auto [on|off]")
+        end
+        say("auto-scan is " .. (Stockist.Scanner:AutoEnabled() and "on" or "off")
+            .. " (scans when the Auction House opens and every 15 minutes while it stays open).")
+    end,
 }
 
 SLASH_STOCKIST1 = "/stockist"
@@ -84,7 +96,7 @@ SlashCmdList["STOCKIST"] = function(input)
     if fn then
         fn(rest)
     else
-        say("commands: status, scan, item <id>, movers")
+        say("commands: status, scan, item <id>, movers, auto [on|off]")
     end
 end
 
