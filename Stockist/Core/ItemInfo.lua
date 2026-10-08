@@ -15,14 +15,34 @@ function ItemInfo.Name(id)
     return name
 end
 
+local missing = {} -- IDs the client said it cannot load (ITEM_DATA_LOAD_RESULT with success = false)
+
 --- Does the game have an item with this ID? Works for items the client has not cached yet. Returns
---- true or false, or nil when the client cannot say (so callers treat nil as "maybe").
+--- true or false, or nil when the client cannot say (so callers treat nil as "maybe", never as missing).
+--- In order: a load that already failed; the client's item database (GetItemInfoInstant answers at once
+--- and returns nothing for an ID that is not an item); then DoesItemExistByID, which did not reliably
+--- say no for made-up IDs on Forever.
 function ItemInfo.Exists(id)
+    if missing[id] then return false end
+    local instant = (C_Item and C_Item.GetItemInfoInstant) or GetItemInfoInstant
+    if instant then
+        local ok, known = pcall(instant, id)
+        if ok then return known ~= nil end
+    end
     if C_Item and C_Item.DoesItemExistByID then
         local ok, exists = pcall(C_Item.DoesItemExistByID, id)
         if ok then return exists and true or false end
     end
     return nil
+end
+
+--- Feed ITEM_DATA_LOAD_RESULT (itemID, success) here: an item the client failed to load does not exist.
+function ItemInfo.NoteLoadResult(id, success)
+    if success == false then
+        missing[id] = true
+    elseif success then
+        missing[id] = nil
+    end
 end
 
 --- Quality 0 (poor) .. 7, or nil if unknown.

@@ -107,9 +107,11 @@ function Fake.install()
     UISpecialFrames = {}
     tinsert = table.insert
     GetCursorPosition = function() return 0, 0 end
+    Fake.frames = {} -- every frame created through CreateFrame, in order
     CreateFrame = function(kind, name, parent)
         local o = Fake.new(kind, parent)
         if name then _G[name] = o end
+        Fake.frames[#Fake.frames + 1] = o
         return o
     end
     C_Timer = {

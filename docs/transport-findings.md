@@ -39,6 +39,10 @@ All of these exist as functions: `ReplicateItems`, `GetNumReplicateItems`, `GetR
 Auctionator (installed in the same client) uses the same modern commodity AH. Its full scan is the
 model for `Market/AuctionScanner.lua`.
 
+## Item existence
+
+`C_Item.DoesItemExistByID(99999999)` did not report a made-up ID as missing on Forever (the chart window showed it as a real item with no prices), so it is only a fallback. The check is now `GetItemInfoInstant(id)` (the client's item database; returns nothing for a non-item), plus a failed `ITEM_DATA_LOAD_RESULT` marking an ID missing. A call that errors counts as "unknown", never "missing".
+
 ## Crafting data (`C_TradeSkillUI`): usable
 
 Measured 2026-10-08 with `/stkprobe craft`, two professions opened.

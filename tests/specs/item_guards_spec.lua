@@ -16,6 +16,41 @@ test("ItemInfo.Exists reports whether the game has the item, or nil when it cann
     C_Item = nil
 end)
 
+test("ItemInfo.Exists trusts the client's item database first", function()
+    local S = load_addon("Core/Format.lua", "Core/ItemInfo.lua")
+    -- the real-client failure: DoesItemExistByID said yes to a made-up ID, GetItemInfoInstant said nothing
+    C_Item = {
+        DoesItemExistByID = function() return true end,
+        GetItemInfoInstant = function(id) if id == 2589 then return 2589, "Tradeskill" end end,
+    }
+    eq(S.ItemInfo.Exists(2589), true)
+    eq(S.ItemInfo.Exists(99999999), false, "not in the item database: not an item")
+    C_Item = nil
+end)
+
+test("ItemInfo.Exists falls back to the global GetItemInfoInstant, then to DoesItemExistByID", function()
+    local S = load_addon("Core/Format.lua", "Core/ItemInfo.lua")
+    GetItemInfoInstant = function(id) if id == 7 then return 7 end end
+    eq(S.ItemInfo.Exists(7), true); eq(S.ItemInfo.Exists(8), false)
+    GetItemInfoInstant = nil
+    C_Item = { DoesItemExistByID = function(id) return id == 7 end }
+    eq(S.ItemInfo.Exists(7), true); eq(S.ItemInfo.Exists(8), false)
+    C_Item = { GetItemInfoInstant = function() error("secret value") end }
+    is_nil(S.ItemInfo.Exists(7), "a failing lookup is unknown, not missing")
+    C_Item = nil
+end)
+
+test("a failed item load marks the ID as missing, a successful one clears it", function()
+    local S = load_addon("Core/Format.lua", "Core/ItemInfo.lua")
+    C_Item = { GetItemInfoInstant = function(id) return id end } -- the database says yes
+    eq(S.ItemInfo.Exists(55), true)
+    S.ItemInfo.NoteLoadResult(55, false)
+    eq(S.ItemInfo.Exists(55), false, "the client could not load it after all")
+    S.ItemInfo.NoteLoadResult(55, true)
+    eq(S.ItemInfo.Exists(55), true)
+    C_Item = nil
+end)
+
 -- PriceChart.Status --------------------------------------------------------------------------------
 
 local function statusSetup()
@@ -94,6 +129,22 @@ test("the panel shows a 404 for an item that does not exist, and no chart", func
     -- hovering the (non-)name does not ask the game for a tooltip of nothing
     Fake.fire(panel.nameHit, "OnEnter")
     eq(Fake.called(GameTooltip, "SetItemByID"), false)
+    cleanup()
+end)
+
+test("a failed item load turns an open panel into Item not found", function()
+    local S = panelSetup()
+    C_Item = { DoesItemExistByID = function() return true end } -- the API says yes, as it did for 99999999
+    local panel = S.ChartPanel.Create(UIParent)
+    panel:SetItem(424242)
+    eq(panel.message.text:find("No prices recorded", 1, true) ~= nil, true, "looks like a normal unscanned item at first")
+    -- the loader frame is the last frame the panel created
+    local loader
+    for _, e in ipairs(Fake.frames) do if e.events.ITEM_DATA_LOAD_RESULT then loader = e end end
+    eq(loader ~= nil, true)
+    Fake.fire(loader, "OnEvent", "ITEM_DATA_LOAD_RESULT", 424242, false)
+    eq(panel.nameText.text:find("Item not found", 1, true) ~= nil, true)
+    eq(panel.message.text:find("No item has the ID 424242", 1, true) ~= nil, true)
     cleanup()
 end)
 

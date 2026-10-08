@@ -137,9 +137,12 @@ function ChartPanel.Create(parent, opts)
     frame:SetScript("OnSizeChanged", function() if self.state.itemID then self:LayoutChart() end end)
 
     -- Item names arrive from the server a moment after the first request.
+    -- A load that fails means the item does not exist, which turns the panel into "Item not found".
     local loader = CreateFrame("Frame")
     loader:RegisterEvent("GET_ITEM_INFO_RECEIVED")
-    loader:SetScript("OnEvent", function(_, _, itemID)
+    loader:RegisterEvent("ITEM_DATA_LOAD_RESULT")
+    loader:SetScript("OnEvent", function(_, event, itemID, success)
+        if event == "ITEM_DATA_LOAD_RESULT" then Stockist.ItemInfo.NoteLoadResult(itemID, success) end
         if frame:IsVisible() and itemID == self.state.itemID then self:Refresh() end
     end)
 
