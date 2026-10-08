@@ -325,13 +325,14 @@ local function createWindow()
 
     -- Legend: the key on the left, "what to look for" (blue) on the right. The text carries its own
     -- colours, so the font strings are plain white by default.
-    -- Each column runs from `leftAnchor` (with offset leftX) to `rightAnchor` (offset rightX) along the bottom.
+    -- Both columns hang from the same line just under the chart, so their headings are level. Each runs
+    -- from `leftAnchor` (offset leftX) to `rightAnchor` (offset rightX) along the chart's bottom edge.
     local function legendColumn(leftAnchor, leftX, rightAnchor, rightX)
         local fs = content:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-        fs:SetPoint("BOTTOMLEFT", content, leftAnchor, leftX, 0)
-        fs:SetPoint("BOTTOMRIGHT", content, rightAnchor, rightX, 0)
+        fs:SetPoint("TOPLEFT", chart.frame, leftAnchor, leftX, -LEGEND_GAP)
+        fs:SetPoint("TOPRIGHT", chart.frame, rightAnchor, rightX, -LEGEND_GAP)
         fs:SetJustifyH("LEFT")
-        fs:SetJustifyV("BOTTOM")
+        fs:SetJustifyV("TOP")
         fs:SetTextColor(1, 1, 1)
         fs:SetWordWrap(true)
         return fs
@@ -355,6 +356,10 @@ function PriceChart.Show(itemID)
     state.itemID = itemID
     refresh()
     win.frame:Show()
+    -- The legend's text height is only known once it has a width, i.e. after the first layout pass.
+    C_Timer.After(0, function()
+        if win.frame:IsShown() then layoutChart() end
+    end)
 end
 
 Stockist.Events:On("SCAN_COMPLETE", function()
