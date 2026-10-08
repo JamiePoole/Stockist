@@ -189,7 +189,9 @@ function Scanner:Collect()
                 index = index + 1
                 if itemID and itemID > 0 and count and count > 0 and buyout and buyout > 0 then
                     local classID, subClassID = itemClass(itemID)
-                    if classID == TRADE_GOODS then
+                    -- Trade goods are the commodities we chart by default. An item the player tracks is
+                    -- recorded whatever it is (a recipe, armour...), so tracking something always works.
+                    if classID == TRADE_GOODS or (Stockist.tracked and Stockist.tracked:Has(itemID)) then
                         local list = tiersByItem[itemID]
                         if not list then
                             list = {}

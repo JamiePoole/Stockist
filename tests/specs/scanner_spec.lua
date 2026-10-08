@@ -87,6 +87,24 @@ test("scan records one reading per trade-goods item, skipping other classes", fu
     eq(events[#events][2], 2)
 end)
 
+test("a tracked item is recorded whatever its class, e.g. a recipe", function()
+    local auctions = {
+        { item = 99, count = 1, buyout = 700 },   -- recipe: class 9
+        { item = 99, count = 1, buyout = 700 },
+        { item = 99, count = 1, buyout = 900 },
+        { item = 98, count = 1, buyout = 5000 },  -- another recipe, not tracked
+    }
+    local S, frame, events, flush = setup(auctions, { classes = { [99] = 9, [98] = 9 } })
+    S.tracked = { Has = function(_, id) return id == 99 end }
+    fire(frame, "AUCTION_HOUSE_SHOW")
+    fire(frame, "REPLICATE_ITEM_LIST_UPDATE")
+    flush()
+    local r = S.store:Latest(99)
+    eq(r.min, 700); eq(r.qty, 3)
+    eq(S.store:GetMeta(99).class, 9)
+    is_nil(S.store:Latest(98))
+end)
+
 test("scan ignores auctions with no buyout or zero count", function()
     local auctions = {
         { item = 10, count = 5, buyout = 0 },
