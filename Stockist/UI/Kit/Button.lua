@@ -6,15 +6,18 @@ local ADDON_NAME, Stockist = ...
 -- is current and no longer reacts to the mouse (no hover, no pressed look, no text indent, no click).
 -- Use Tooltip.SetAvailable for the other case, a choice that cannot be used right now.
 --
--- The selected look keeps the game's own button art (embossed border, shaded centre) and recolours it
--- blue: the textures are desaturated to grey, then tinted. A flat fill would lose the bevel.
+-- The selected look keeps the game's own button art (embossed border, shaded centre): the textures are
+-- desaturated to grey, which leaves a grey border and a dark shaded centre, and a blue layer is added
+-- over the centre with additive blending, so it brightens the shading instead of replacing it. (Tinting
+-- the red art blue by multiplying only ever darkens it, and a flat fill loses the bevel.)
 local UI = Stockist.UI or {}
 Stockist.UI = UI
 
 local Button = {}
 UI.Button = Button
 
-local SELECTED_TINT = { 0.35, 0.60, 1.00 }
+local SELECTED_GLOW = { 0.10, 0.36, 0.85, 0.9 } -- added to the grey art; sits inside the border
+local GLOW_INSET_X, GLOW_INSET_Y = 4, 3
 local SELECTED_TEXT = { 1, 1, 1 }
 local NORMAL_TEXT = { 1, 0.82, 0 } -- the game's button text gold
 
@@ -45,14 +48,19 @@ function Button.SetSelected(btn, selected)
     btn.stockistSelected = selected
 
     for _, tex in ipairs(bodyTextures(btn)) do
-        if selected then
-            tex:SetDesaturated(true)
-            tex:SetVertexColor(SELECTED_TINT[1], SELECTED_TINT[2], SELECTED_TINT[3])
-        else
-            tex:SetDesaturated(false)
-            tex:SetVertexColor(1, 1, 1)
-        end
+        tex:SetDesaturated(selected)
+        tex:SetVertexColor(1, 1, 1)
     end
+
+    if not btn.selectedGlow then
+        local glow = btn:CreateTexture(nil, "ARTWORK", nil, 3)
+        glow:SetPoint("TOPLEFT", GLOW_INSET_X, -GLOW_INSET_Y)
+        glow:SetPoint("BOTTOMRIGHT", -GLOW_INSET_X, GLOW_INSET_Y)
+        glow:SetColorTexture(SELECTED_GLOW[1], SELECTED_GLOW[2], SELECTED_GLOW[3], SELECTED_GLOW[4])
+        glow:SetBlendMode("ADD")
+        btn.selectedGlow = glow
+    end
+    btn.selectedGlow:SetShown(selected)
 
     -- The button that is already active has nothing to offer on hover or press.
     local highlight, pushed = btn:GetHighlightTexture(), btn:GetPushedTexture()

@@ -25,6 +25,7 @@ local function trackedMethods()
         SetColorTexture = function(self, r, g, b, a) self.color = { r, g, b, a } end,
         SetTextColor = function(self, r, g, b, a) self.textColor = { r, g, b, a } end,
         SetDesaturated = function(self, v) self.desaturated = v and true or false end,
+        SetBlendMode = function(self, mode) self.blendMode = mode end,
         SetVertexColor = function(self, r, g, b, a) self.vertexColor = { r, g, b, a } end,
         GetObjectType = function(self) return self.kind end,
         RegisterForClicks = function(self, ...) self.clickButtons = { ... } end,

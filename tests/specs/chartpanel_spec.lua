@@ -86,10 +86,17 @@ test("the active scope keeps the button art but recoloured blue, with white text
 
     eq(active.enabled, true, "still enabled, so its tooltip works")
     for _, key in ipairs({ "Left", "Middle", "Right" }) do
-        local tex = active[key]
-        eq(tex.desaturated, true, key .. " is desaturated first, so the shading is kept")
-        eq(tex.vertexColor[3] > tex.vertexColor[1], true, key .. " is tinted blue")
+        eq(active[key].desaturated, true, key .. " is turned grey, which keeps the border and the shading")
     end
+    local glow = active.selectedGlow
+    eq(glow.shown, true, "a blue layer over the centre")
+    eq(glow.blendMode, "ADD", "added to the grey art, so it brightens the shading instead of darkening it")
+    eq(glow.color[3] > glow.color[1], true, "and it is blue")
+    eq(glow.color[3] > 0.7, true, "a bright blue")
+    -- it sits inside the border, so the grey bevel stays visible
+    local topLeft, bottomRight = glow.points[1], glow.points[2]
+    eq(topLeft[1], "TOPLEFT"); eq(topLeft[2] > 0 and -topLeft[3] > 0, true, "inset from the top-left")
+    eq(bottomRight[1], "BOTTOMRIGHT"); eq(bottomRight[2] < 0 and bottomRight[3] > 0, true, "inset from the bottom-right")
     local text = active:GetFontString().textColor
     eq(text[1] == 1 and text[2] == 1 and text[3] == 1, true, "white text")
     eq(active:GetHighlightTexture().alpha, 0, "no hover effect")
@@ -102,6 +109,7 @@ test("the active scope keeps the button art but recoloured blue, with white text
         eq(other[key].desaturated, false, "inactive scopes keep the stock red art")
         eq(other[key].vertexColor[1] == 1 and other[key].vertexColor[2] == 1 and other[key].vertexColor[3] == 1, true)
     end
+    eq(other.selectedGlow.shown, false, "and no blue layer")
     local gold = other:GetFontString().textColor
     eq(gold[1] == 1 and gold[2] == 0.82 and gold[3] == 0, true, "inactive scopes keep the normal gold text")
     eq(other:GetHighlightTexture().alpha, 1, "inactive scopes keep their hover effect")
@@ -124,6 +132,7 @@ test("clicking the active scope does nothing, and the blue moves when the scope 
     eq(S.UI.Button.IsSelected(panel.tfButtons["1D"]), false, "the old one is released")
     eq(panel.tfButtons["1M"].Left.desaturated, true)
     eq(panel.tfButtons["1D"].Left.desaturated, false, "and has its red art back")
+    eq(panel.tfButtons["1D"].selectedGlow.shown, false); eq(panel.tfButtons["1M"].selectedGlow.shown, true, "the blue moved")
     eq(panel.tfButtons["1D"]:GetHighlightTexture().alpha, 1, "and its hover effect")
     eq(panel.tfButtons["1D"].clickButtons[1], "LeftButtonUp", "and can be clicked again")
     eq(panel.tfButtons["1D"].pushedTextOffset[2], -1)
