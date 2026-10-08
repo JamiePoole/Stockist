@@ -279,9 +279,15 @@ f:SetScript("OnEvent", function(_, event, ...)
     end
 end)
 
+-- Other probe files (Craft.lua, Owned.lua) register their subcommands in this table.
+StockistProbeCommands = StockistProbeCommands or {}
+
 SLASH_STOCKISTPROBE1 = "/stkprobe"
 SlashCmdList["STOCKISTPROBE"] = function(arg)
-    if arg == "club" then
+    local extra = StockistProbeCommands[arg]
+    if extra then
+        extra()
+    elseif arg == "club" then
         runClub(false)
     elseif arg == "clubread" then
         runClub(true)
