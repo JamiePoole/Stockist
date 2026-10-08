@@ -7,7 +7,8 @@ local Util = Charts.Util
 -- Config:
 --   {
 --     theme = "dark", minimal = false (no axes or padding: sparklines), padding = {left,right,top,bottom},
---     x = { format = "time", range = {min, max}?, tzOffset = seconds?, resolution = seconds per data point? },
+--     x = { format = "time", range = {min, max}?, tzOffset = seconds?, resolution = seconds per data point?,
+--           ticks = { explicit tick values }? },
 --     panes = {
 --       { id = "price", weight = 3, title = "Price" (shown in the corner), axis = { format = "money" },
 --         y = { range = {min, max}? },
@@ -170,7 +171,8 @@ local function drawAxes(model, canvas)
         -- too, so each tick lines up with its candle; only finer data uses local clock boundaries.
         local x = model.config.x
         local daily = x.resolution and x.resolution >= 86400
-        ticks = Scale.TimeTicks(xs.d0, xs.d1, math.max(2, math.floor(plot.w / 80)), daily and 0 or x.tzOffset)
+        ticks = x.ticks -- a feature may pin the ticks (month starts, midnights...)
+            or Scale.TimeTicks(xs.d0, xs.d1, math.max(2, math.floor(plot.w / 80)), daily and 0 or x.tzOffset)
     else
         ticks = Scale.Ticks(xs.d0, xs.d1, math.max(2, math.floor(plot.w / 80)))
     end

@@ -10,12 +10,13 @@ Stockist.PriceChart = PriceChart
 
 -- `prefer` lists the data kinds to try, best first: "ticks" (one point per scan), "hourly" and
 -- "daily" candles. The first kind with at least MIN_POINTS points is used, so a young data set
--- falls back to finer detail instead of showing a single mark. `span` is the window the axis covers.
+-- falls back to finer detail instead of showing a single mark. The axis always covers a whole
+-- calendar period in local time (see Window): today, this Monday-to-Sunday week, this month.
 -- Not offered yet: ALL (everything stored); see docs/ROADMAP.md.
 local TIMEFRAMES = {
-    { key = "1D", span = 86400, prefer = { "ticks", "hourly" } },
-    { key = "1W", span = 7 * 86400, prefer = { "hourly", "ticks" } },
-    { key = "1M", span = 30 * 86400, prefer = { "daily", "hourly", "ticks" } },
+    { key = "1D", prefer = { "hourly", "ticks" } },
+    { key = "1W", prefer = { "hourly", "ticks" } },
+    { key = "1M", prefer = { "daily", "hourly", "ticks" } },
 }
 local MIN_POINTS = 3
 local RESOLUTION = { ticks = 60, hourly = 3600, daily = 86400 }
@@ -44,7 +45,10 @@ local function seriesFor(store, itemID, kind, fromTs)
             line[i] = { x = t.x, y = t.y }
             supply[i] = { x = t.x, y = t.q, up = (i == 1) or t.y >= ticks[i - 1].y }
         end
-        return { price = { type = "line", id = "price", label = "price", points = line }, supply = supply, count = #line }
+        return {
+            price = { type = "line", id = "price", label = "price", points = line, markers = true },
+            supply = supply, count = #line,
+        }
     end
     local points = {}
     for i, c in ipairs(store:GetCandles(itemID, kind, fromTs, nil)) do
@@ -54,37 +58,80 @@ local function seriesFor(store, itemID, kind, fromTs)
     return { price = { type = "candle", id = "price", points = points }, supply = supply, count = #points }
 end
 
+--- The calendar window a scope covers, in local time, including the part that has not happened yet:
+--- start, end, and the axis tick times.
+---   1D  today, midnight to midnight, ticks every 3 hours
+---   1W  this week, Monday to Sunday, a tick at each midnight
+---   1M  this month, the 1st to the last day, ticks on the 1st, 8th, 15th, 22nd and 29th
+function PriceChart.Window(key, now, tz)
+    local Calendar = Stockist.Calendar
+    local ticks = {}
+    if key == "1D" then
+        local s, e = Calendar.DayRange(now, tz)
+        for t = s, e - 1, 3 * 3600 do ticks[#ticks + 1] = t end
+        return s, e, ticks
+    elseif key == "1W" then
+        local s, e = Calendar.WeekRange(now, tz)
+        for t = s, e - 1, 86400 do ticks[#ticks + 1] = t end
+        return s, e, ticks
+    end
+    local s, e, days = Calendar.MonthRange(now, tz)
+    for day = 1, days, 7 do ticks[#ticks + 1] = s + (day - 1) * 86400 end
+    return s, e, ticks
+end
+
 --- Chart config for an item.
 ---   indicators = { sma = bool, bollinger = bool }
---- The x axis always covers the chosen window (the last day, week or month) so the scope buttons
---- visibly change the chart, even while the data only fills a small part of it. Each view prefers one
---- kind of data (see TIMEFRAMES) and falls back to a finer kind while it has fewer than MIN_POINTS
---- points; the chart says so in a corner note.
+--- The x axis always covers the whole calendar window for the scope (see Window), so readings sit at
+--- their real position in the day, week or month. Each view prefers one kind of data (see TIMEFRAMES)
+--- and falls back to a finer kind while it has fewer than MIN_POINTS points. Anything the chart cannot
+--- do yet (a fallback, an indicator without enough data) is explained in a corner note.
 function PriceChart.BuildConfig(store, itemID, key, indicators, now, tzOffset)
     local tf = timeframe(key)
-    local fromTs = now - tf.span
+    tzOffset = tzOffset or 0
+    local windowStart, windowEnd, ticks = PriceChart.Window(tf.key, now, tzOffset)
 
     local chosen, chosenKind, richest, richestKind
     for _, kind in ipairs(tf.prefer) do
-        local s = seriesFor(store, itemID, kind, fromTs)
+        local s = seriesFor(store, itemID, kind, windowStart)
         if s.count >= MIN_POINTS then chosen, chosenKind = s, kind break end
         if not richest or s.count > richest.count then richest, richestKind = s, kind end
     end
     if not chosen then chosen, chosenKind = richest, richestKind end
 
-    local note
+    local notes = {}
     if chosenKind ~= tf.prefer[1] then
-        note = ("Not enough history yet for %s: showing %s"):format(KIND_NAME[tf.prefer[1]], KIND_NAME[chosenKind])
+        notes[#notes + 1] = ("Not enough history yet for %s: showing %s"):format(
+            KIND_NAME[tf.prefer[1]], KIND_NAME[chosenKind])
     end
 
+    -- Indicators scale to the data we have: a 7-point average needs 8 points, so with less we shorten
+    -- it, and with fewer than 3 points there is nothing to average at all.
     local overlays = {}
     indicators = indicators or {}
-    if indicators.sma then overlays[#overlays + 1] = { type = "sma", of = "price", period = 7 } end
-    if indicators.bollinger then overlays[#overlays + 1] = { type = "bollinger", of = "price", period = 10, k = 2 } end
+    local n = chosen.count
+    if indicators.sma then
+        if n >= MIN_POINTS then
+            overlays[#overlays + 1] = { type = "sma", of = "price", period = math.min(7, n - 1) }
+        else
+            notes[#notes + 1] = "SMA needs at least 3 points"
+        end
+    end
+    if indicators.bollinger then
+        if n >= MIN_POINTS then
+            overlays[#overlays + 1] = { type = "bollinger", of = "price", period = math.min(10, n - 1), k = 2 }
+        else
+            notes[#notes + 1] = "BB needs at least 3 points"
+        end
+    end
+    local note = #notes > 0 and table.concat(notes, ". ") or nil
 
     return {
         transparent = true, -- the window supplies the background
-        x = { format = "time", tzOffset = tzOffset or 0, resolution = RESOLUTION[chosenKind], range = { fromTs, now } },
+        x = {
+            format = "time", tzOffset = tzOffset, resolution = RESOLUTION[chosenKind],
+            range = { windowStart, windowEnd }, ticks = ticks,
+        },
         emptyText = "No readings in this range yet",
         note = note,
         panes = {
@@ -204,7 +251,6 @@ local function createWindow()
     priceText = content:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     priceText:SetPoint("LEFT", nameText, "RIGHT", 12, 0)
     metaText = content:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    metaText:SetTextColor(0.7, 0.72, 0.78)
     metaText:SetPoint("LEFT", priceText, "RIGHT", 12, 0)
 
     -- Controls, right to left: time scope buttons | divider | chart overlays.

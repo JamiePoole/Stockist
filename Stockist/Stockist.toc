@@ -13,6 +13,7 @@ Core\Clock.lua
 Core\EventBus.lua
 Core\Registry.lua
 Core\Format.lua
+Core\Calendar.lua
 Core\ItemInfo.lua
 Core\Help.lua
 Core\HelpTopics.lua

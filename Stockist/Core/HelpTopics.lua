@@ -4,13 +4,13 @@ local ADDON_NAME, Stockist = ...
 -- never seen a trading chart.
 local R = Stockist.Help.Register
 
-R("timeframe-1D", "Last day", "Shows the last 24 hours, one candle per hour.",
-    "Use this to see what the price did today. Each candle is one hour of readings.")
-R("timeframe-1W", "Last week", "Shows the last 7 days, one candle per hour.",
+R("timeframe-1D", "Today", "Midnight to midnight, one candle per hour.",
+    "Use this to see what the price did today. The right-hand side is the rest of the day, still to come.")
+R("timeframe-1W", "This week", "Monday to Sunday, one candle per hour.",
     "A good default: long enough to see a trend, detailed enough to spot a spike.")
-R("timeframe-1M", "Last month", "Shows the last 30 days, one candle per day.",
+R("timeframe-1M", "This month", "The 1st to the last day of the month, one candle per day.",
     "Each candle is a whole day, so you see the bigger picture and slow trends.")
-R("sma", "Moving average (SMA)", "The average of the last 7 candles, drawn as a smooth line.",
+R("sma", "Moving average (SMA)", "The average of the last few points (up to 7), drawn as a smooth line.",
     "SMA stands for Simple Moving Average. It smooths out the ups and downs so you can see the "
     .. "direction. When the price is above this line, the recent trend is up; below it, down. "
     .. "A price far from the line has moved a lot faster than usual.")

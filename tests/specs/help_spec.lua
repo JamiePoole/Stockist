@@ -65,12 +65,17 @@ test("Format.MoneyColored colours gold, silver and copper separately", function(
     eq(S.Format.MoneyColored(0), "|cffeda65e0c|r")
 end)
 
-test("Format.MoneyDisplay uses the game's coin icons when they exist, coloured text otherwise", function()
+test("Format.MoneyIcons puts the real coin icon after each amount", function()
     local S = ns()
-    eq(S.Format.MoneyDisplay(50), S.Format.MoneyColored(50))
-    GetCoinTextureString = function(c) return "icons:" .. c end
-    eq(S.Format.MoneyDisplay(12345.4), "icons:12345")
-    GetCoinTextureString = nil
+    local gold = "|TInterface\\MoneyFrame\\UI-GoldIcon:0:0:2:0|t"
+    local silver = "|TInterface\\MoneyFrame\\UI-SilverIcon:0:0:2:0|t"
+    local copper = "|TInterface\\MoneyFrame\\UI-CopperIcon:0:0:2:0|t"
+    eq(S.Format.MoneyIcons(123456), "12" .. gold .. " 34" .. silver .. " 56" .. copper)
+    eq(S.Format.MoneyIcons(120000), "12" .. gold)
+    eq(S.Format.MoneyIcons(340), "3" .. silver .. " 40" .. copper)
+    eq(S.Format.MoneyIcons(0), "0" .. copper)
+    eq(S.Format.MoneyDisplay(340), S.Format.MoneyIcons(340))
+    eq(S.Format.MoneyIcons(339.6), S.Format.MoneyIcons(340), "rounds to whole copper")
 end)
 
 test("ColoredName wraps a cached item in its rarity colour", function()

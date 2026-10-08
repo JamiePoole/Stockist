@@ -32,12 +32,29 @@ function Format.MoneyColored(copper)
     return table.concat(parts, " ")
 end
 
---- Money for on-screen text: the game's own coin icons when available, coloured g/s/c otherwise.
+-- The game's coin art. Width 0 / height 0 scale it to the font; the 2 is a small gap before it.
+local COIN_ICONS = {
+    g = "|TInterface\\MoneyFrame\\UI-GoldIcon:0:0:2:0|t",
+    s = "|TInterface\\MoneyFrame\\UI-SilverIcon:0:0:2:0|t",
+    c = "|TInterface\\MoneyFrame\\UI-CopperIcon:0:0:2:0|t",
+}
+
+--- Money with the real gold, silver and copper coin icons after each number (like the bags).
+function Format.MoneyIcons(copper)
+    local c = math.floor(copper + 0.5)
+    local g = math.floor(c / 10000)
+    local s = math.floor((c % 10000) / 100)
+    local cc = c % 100
+    local parts = {}
+    if g > 0 then parts[#parts + 1] = g .. COIN_ICONS.g end
+    if s > 0 then parts[#parts + 1] = s .. COIN_ICONS.s end
+    if cc > 0 or #parts == 0 then parts[#parts + 1] = cc .. COIN_ICONS.c end
+    return table.concat(parts, " ")
+end
+
+--- Money for on-screen text.
 function Format.MoneyDisplay(copper)
-    if GetCoinTextureString then
-        return GetCoinTextureString(math.floor(copper + 0.5))
-    end
-    return Format.MoneyColored(copper)
+    return Format.MoneyIcons(copper)
 end
 
 --- Up to two decimals, trailing zeros dropped: 12.5 -> "12.5", 12 -> "12".

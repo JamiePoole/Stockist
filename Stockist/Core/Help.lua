@@ -22,6 +22,9 @@ end
 
 function Help.SetTutorial(on)
     Stockist.settings.tutorial = on and true or false
+    if Stockist.Print then
+        Stockist.Print("tutorial tips " .. (Help.TutorialEnabled() and "on" or "off") .. ".")
+    end
     Stockist.Events:Fire("TUTORIAL_CHANGED", Help.TutorialEnabled())
 end
 

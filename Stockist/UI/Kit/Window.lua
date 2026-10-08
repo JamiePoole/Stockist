@@ -81,9 +81,13 @@ function Window.Create(opts)
 
     -- Tutorial mode is one account-wide setting shared by every window and tooltip.
     local help = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
-    help:SetSize(22, 22)
+    help:SetSize(23, 23)
     help:SetPoint("RIGHT", close, "LEFT", -2, 0)
     help:SetText("?")
+    -- Sit above the draggable title bar, which spans the same strip and would otherwise take the click.
+    help:SetFrameLevel(bar:GetFrameLevel() + 10)
+    close:SetFrameLevel(bar:GetFrameLevel() + 10)
+    help:RegisterForClicks("LeftButtonUp")
     local function paintHelp()
         local fs = help:GetFontString()
         if Stockist.Help.TutorialEnabled() then
