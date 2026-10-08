@@ -113,7 +113,7 @@ end
 ---------------------------------------------------------------------------------------------------
 
 local state = { itemID = nil, timeframe = "1D", indicators = { sma = true, bollinger = false } }
-local win, chart, header, legend, tfButtons, toggleButtons, tutorialButton
+local win, chart, header, legend, tfButtons, toggleButtons
 
 local function paintToggle(btn, on)
     local fs = btn:GetFontString()
@@ -132,9 +132,8 @@ local function refresh()
     for key, btn in pairs(tfButtons) do btn:SetEnabled(key ~= state.timeframe) end
     for key, btn in pairs(toggleButtons) do paintToggle(btn, state.indicators[key]) end
 
-    -- The legend under the chart is part of tutorial mode.
+    -- The legend under the chart is part of tutorial mode (toggled from the window header).
     local tutorial = Stockist.Help.TutorialEnabled()
-    paintToggle(tutorialButton, tutorial)
     local _, short, detail = Stockist.Help.Lines("legend")
     legend:SetText((short or "") .. (detail and ("\n" .. detail) or ""))
     legend:SetShown(tutorial)
@@ -178,14 +177,6 @@ local function createWindow()
         toggleButtons[def[1]] = b
         prev = b
     end
-    tutorialButton = button(content, "?", 24, "tutorial")
-    tutorialButton:SetPoint("RIGHT", prev, "LEFT", -10, 0)
-    tutorialButton:SetScript("OnClick", function()
-        Stockist.Help.SetTutorial(not Stockist.Help.TutorialEnabled())
-        refresh()
-        GameTooltip:Hide()
-    end)
-
     chart = Stockist.Charts.Create(content, { series = {} })
 
     legend = content:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
@@ -212,5 +203,9 @@ function PriceChart.Show(itemID)
 end
 
 Stockist.Events:On("SCAN_COMPLETE", function()
+    if win and win.frame:IsShown() then refresh() end
+end)
+
+Stockist.Events:On("TUTORIAL_CHANGED", function()
     if win and win.frame:IsShown() then refresh() end
 end)

@@ -73,9 +73,33 @@ function Window.Create(opts)
     title:SetPoint("LEFT", 10, 0)
     title:SetText(opts.title or "")
 
+    -- Header buttons sit inside the title bar, right-aligned: close, then the tutorial toggle.
     local close = CreateFrame("Button", nil, frame, "UIPanelCloseButton")
-    close:SetPoint("TOPRIGHT", 2, 2)
+    close:SetSize(22, 22)
+    close:SetPoint("TOPRIGHT", -3, -1)
     close:SetScript("OnClick", function() frame:Hide() end)
+
+    -- Tutorial mode is one account-wide setting shared by every window and tooltip.
+    local help = CreateFrame("Button", nil, frame)
+    help:SetSize(22, 22)
+    help:SetPoint("RIGHT", close, "LEFT", -2, 0)
+    local helpText = help:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    helpText:SetAllPoints()
+    helpText:SetText("?")
+    local function paintHelp()
+        if Stockist.Help.TutorialEnabled() then
+            helpText:SetTextColor(0.3, 1, 0.5)
+        else
+            helpText:SetTextColor(0.6, 0.6, 0.6)
+        end
+    end
+    help:SetScript("OnClick", function()
+        Stockist.Help.SetTutorial(not Stockist.Help.TutorialEnabled())
+        GameTooltip:Hide()
+    end)
+    UI.Tooltip.Attach(help, "tutorial")
+    Stockist.Events:On("TUTORIAL_CHANGED", paintHelp)
+    paintHelp()
 
     local content = CreateFrame("Frame", nil, frame)
     content:SetPoint("TOPLEFT", 8, -TITLE_HEIGHT - 4)

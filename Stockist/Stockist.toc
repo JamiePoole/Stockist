@@ -33,8 +33,8 @@ UI\Charts\Overlays\Overlays.lua
 UI\Charts\Core.lua
 UI\Charts\FrameCanvas.lua
 UI\Charts\ChartFrame.lua
-UI\Kit\Window.lua
 UI\Kit\Tooltip.lua
+UI\Kit\Window.lua
 Features\PriceChart.lua
 Features\Slash.lua
 Core\Bootstrap.lua
