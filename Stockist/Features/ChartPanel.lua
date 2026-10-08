@@ -39,8 +39,8 @@ end
 
 --- Create a chart panel filling `parent`. `opts` (optional): itemID, timeframe ("1D"/"1W"/"1M"),
 --- indicators ({ sma = bool, bollinger = bool }), link (a link group name: the panel then follows
---- that group's selected item, see Core/Link.lua), popOut (add a "Pop out" button that opens the
---- item in its own window).
+--- that group's selected item, see Core/Link.lua), popOut (add a pop-out icon button, rightmost in the
+--- header, that opens the item in its own window).
 function ChartPanel.Create(parent, opts)
     opts = opts or {}
     local self = setmetatable({
@@ -75,12 +75,22 @@ function ChartPanel.Create(parent, opts)
     self.metaText = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     self.metaText:SetPoint("LEFT", self.priceText, "RIGHT", 12, 0)
 
-    -- Controls, right to left: time scope buttons | divider | chart overlays.
+    -- Controls, right to left: pop out | time scope buttons | divider | chart overlays.
     local prev
+    local gap = -2
+    if opts.popOut then
+        local pop = Stockist.UI.IconButton.Create(frame, { icon = "popout", width = 24, height = 20 })
+        pop:SetPoint("TOPRIGHT", 0, 0)
+        pop:SetScript("OnClick", function() self:PopOut() end)
+        Stockist.UI.Tooltip.Attach(pop, "popout")
+        self.popOutButton = pop
+        prev, gap = pop, -8
+    end
     for i = #PriceChart.TIMEFRAMES, 1, -1 do
         local tf = PriceChart.TIMEFRAMES[i]
         local b = button(frame, tf.key, 40, "timeframe-" .. tf.key)
-        if prev then b:SetPoint("RIGHT", prev, "LEFT", -2, 0) else b:SetPoint("TOPRIGHT", 0, 0) end
+        if prev then b:SetPoint("RIGHT", prev, "LEFT", gap, 0) else b:SetPoint("TOPRIGHT", 0, 0) end
+        gap = -2
         b:SetScript("OnClick", function() self.state.timeframe = tf.key; self:Refresh() end)
         self.tfButtons[tf.key] = b
         prev = b
@@ -107,13 +117,6 @@ function ChartPanel.Create(parent, opts)
         end)
         self.toggleButtons[key] = b
         prev = b
-    end
-
-    if opts.popOut then
-        local pop = button(frame, "Pop out", 62, "popout")
-        pop:SetPoint("RIGHT", prev, "LEFT", -10, 0)
-        pop:SetScript("OnClick", function() self:PopOut() end)
-        self.popOutButton = pop
     end
 
     self.chart = Stockist.Charts.Create(frame, { series = {} })

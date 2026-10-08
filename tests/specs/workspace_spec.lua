@@ -10,7 +10,7 @@ local FILES = {
     "UI/Charts/Charts.lua", "UI/Charts/Util.lua", "UI/Charts/Scale.lua", "UI/Charts/Formatters.lua",
     "UI/Charts/Theme.lua", "UI/Charts/Series/Line.lua", "UI/Charts/Series/Candle.lua", "UI/Charts/Series/Bar.lua",
     "UI/Charts/Overlays/Overlays.lua", "UI/Charts/Core.lua", "UI/Charts/FrameCanvas.lua", "UI/Charts/ChartFrame.lua",
-    "UI/Kit/Tooltip.lua", "UI/Kit/Window.lua", "Features/PriceChart.lua", "Features/ChartPanel.lua",
+    "UI/Kit/Tooltip.lua", "UI/Kit/IconButton.lua", "UI/Kit/Window.lua", "Features/PriceChart.lua", "Features/ChartPanel.lua",
     "Features/Workspace.lua",
 }
 
@@ -213,6 +213,51 @@ test("cells are laid out when the window opens, and again on the next frame and 
     content.size = { 2000, 800 }
     Fake.fire(content, "OnSizeChanged")
     eq(sized[2].size[1] > before, true, "the chart cell grew with the window")
+    Fake.uninstall()
+end)
+
+test("the pop-out icon is a square with an arrow leaving its corner, inside the button", function()
+    local S = setup()
+    local icon = S.UI.IconButton.ICONS.popout
+    eq(#icon, 7, "four sides of the square, a shaft and two arrowhead strokes")
+    for _, s in ipairs(icon) do
+        for _, v in ipairs(s) do eq(math.abs(v) <= 7, true, "inside the button: " .. v) end
+    end
+    local tip = icon[5]
+    eq(tip[3], 6); eq(tip[4], 6, "the arrow points to the top-right")
+    -- the square is open at the top-right: neither the top nor the right side reaches the corner
+    eq(icon[3][3] < 3, true); eq(icon[4][4] < 3, true)
+    Fake.uninstall()
+end)
+
+test("an icon button draws its segments, highlights on hover and rejects unknown icons", function()
+    local S = setup()
+    local b = S.UI.IconButton.Create(UIParent, { icon = "popout", width = 24, height = 20 })
+    eq(#b.lines, 7)
+    eq(b.lines[1].startPoint[1], "CENTER")
+    eq(b.lines[5].endPoint[3], 6); eq(b.lines[5].endPoint[4], 6)
+    local normal = { b.lines[1].color[1], b.lines[1].color[2], b.lines[1].color[3] }
+    Fake.fire(b, "OnEnter")
+    eq(b.lines[1].color[1], 1); eq(b.lines[1].color[3], 0, "gold while hovered")
+    Fake.fire(b, "OnLeave")
+    eq(b.lines[1].color[1], normal[1], "back to normal")
+    throws(function() S.UI.IconButton.Create(UIParent, { icon = "nope" }) end, "unknown icon")
+    Fake.uninstall()
+end)
+
+test("the pop-out button is rightmost in the chart header and the scope buttons sit to its left", function()
+    local S = setup()
+    local with = S.ChartPanel.Create(UIParent, { popOut = true })
+    local pop = with.popOutButton
+    eq(pop.points[1][1], "TOPRIGHT", "pinned to the top-right corner")
+    local oneMonth = with.tfButtons["1M"].points[1]
+    eq(oneMonth[1], "RIGHT"); eq(oneMonth[2], pop); eq(oneMonth[3], "LEFT"); eq(oneMonth[4], -8)
+    local oneWeek = with.tfButtons["1W"].points[1]
+    eq(oneWeek[2], with.tfButtons["1M"]); eq(oneWeek[4], -2, "scope buttons stay close together")
+
+    local without = S.ChartPanel.Create(UIParent)
+    is_nil(without.popOutButton)
+    eq(without.tfButtons["1M"].points[1][1], "TOPRIGHT", "no pop-out: the scope buttons take the corner")
     Fake.uninstall()
 end)
 

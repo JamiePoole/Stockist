@@ -22,6 +22,9 @@ local function trackedMethods()
         Disable = function(self) self.enabled = false end,
         IsEnabled = function(self) return self.enabled end,
         SetAlpha = function(self, a) self.alpha = a end,
+        SetColorTexture = function(self, r, g, b, a) self.color = { r, g, b, a } end,
+        SetStartPoint = function(self, ...) self.startPoint = { ... } end,
+        SetEndPoint = function(self, ...) self.endPoint = { ... } end,
         SetScript = function(self, name, fn) self.scripts[name] = fn end,
         GetScript = function(self, name) return self.scripts[name] end,
         HookScript = function(self, name, fn)

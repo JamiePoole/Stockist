@@ -40,6 +40,7 @@ UI\Charts\Core.lua
 UI\Charts\FrameCanvas.lua
 UI\Charts\ChartFrame.lua
 UI\Kit\Tooltip.lua
+UI\Kit\IconButton.lua
 UI\Kit\Window.lua
 Features\PriceChart.lua
 Features\ChartPanel.lua
