@@ -787,3 +787,35 @@ test("dropping an item anywhere on the workspace charts it: the window, the titl
     endCursor()
     Fake.uninstall()
 end)
+
+test("dropping an item on a pop-out changes only that chart, never the workspace's selection", function()
+    local S = setup()
+    local c = cursor()
+    local panels = {}
+    local chart = S.Panels:Get("chart")
+    local realCreate = chart.create
+    chart.create = function(...) local p = realCreate(...); panels[#panels + 1] = p; return p end
+    S.Workspace.Show(7)
+    local workspaceChart = panels[1]
+    S.PriceChart.Show(8) -- pop item 8 out
+    local pop = S.PriceChart.PopOutPanel()
+    eq(pop:GetItem(), 8); eq(workspaceChart:GetItem(), 7)
+
+    c.carrying = { "item", 10 }
+    Fake.fire(StockistChartWindow, "OnReceiveDrag") -- dropped on the pop-out window
+    eq(pop:GetItem(), 10, "the pop-out changed")
+    eq(workspaceChart:GetItem(), 7, "the workspace chart did not")
+    eq(S.Link.Get("A"), 7, "nor did the workspace's selection")
+
+    c.carrying = { "item", 9 }
+    Fake.fire(pop.frame, "OnReceiveDrag") -- onto the panel itself
+    eq(pop:GetItem(), 9); eq(S.Link.Get("A"), 7)
+
+    -- and the other way round: dropping on the workspace leaves the pop-out alone
+    c.carrying = { "item", 8 }
+    Fake.fire(StockistWorkspace, "OnReceiveDrag")
+    eq(S.Link.Get("A"), 8); eq(workspaceChart:GetItem(), 8)
+    eq(pop:GetItem(), 9, "the pop-out keeps its own item")
+    endCursor()
+    Fake.uninstall()
+end)

@@ -219,6 +219,9 @@ end
 
 local win, panel
 
+--- The pop-out window's chart panel (nil until it has been opened once).
+function PriceChart.PopOutPanel() return panel end
+
 --- Open the price window for an item.
 function PriceChart.Show(itemID)
     if not win then
@@ -226,6 +229,11 @@ function PriceChart.Show(itemID)
             name = "StockistChartWindow", title = "Stockist", width = 680, height = 520, minWidth = 520, minHeight = 420,
         })
         panel = Stockist.ChartPanel.Create(win.content)
+        -- An item dropped anywhere on the pop-out (the window, its title bar) changes this chart only: the panel
+        -- is not in a link group, so the workspace's selection is left alone.
+        local function drop(itemID) panel:Pick(itemID) end
+        Stockist.ItemPicker.AcceptDrops(win.frame, drop)
+        Stockist.ItemPicker.AcceptDrops(win.bar, drop)
     end
     panel:SetItem(itemID)
     win.frame:Show()
