@@ -36,7 +36,7 @@ Popping out is remembered for the session only: after a relog `/stockist` opens 
 
 ### My auctions
 
-Answers "is it worth cancelling?". For each of your listings: your price, the lowest price, how many units are listed cheaper than you, the trend, and the **real cost of cancelling** (the client provides `C_AuctionHouse.GetCancelCost`, which Auctionator's Cancelling tab uses; cancelling can forfeit the deposit). Present the numbers and a plain-language summary ("12 units are cheaper than yours; cancelling costs 30s"). No sales-speed data exists in the AH, so we only report what is visible, never a promise. To confirm on Forever: the 5% cut on sales and what exactly a cancel forfeits.
+Answers "is it worth cancelling?". For each of your listings: your price, the lowest price, how many units are listed cheaper than you, the trend, and the **cost of cancelling**. Measured on Forever: cancelling **forfeits the deposit** (no refund came back), while `C_AuctionHouse.GetCancelCost` reports 0 for a listing with no bid, so the deposit is the number to show. The API does not report the deposit of an existing listing; it is proportional to the duration (2h : 8h : 24h = 1 : 4 : 12) and `timeLeftSeconds` bounds which one it was. The reliable way is to record the deposit when the player posts. Present the numbers and a plain-language summary ("12 units are cheaper than yours; cancelling loses your 92c deposit"). No sales-speed data exists in the AH, so we only report what is visible, never a promise. To confirm on Forever: the cut taken from a sale (read from a sale invoice with `/stkprobe mailcut`).
 
 ### Craft margins
 
