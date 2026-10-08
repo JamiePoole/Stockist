@@ -10,9 +10,6 @@ R("timeframe-1W", "Last week", "Shows the last 7 days, one candle per hour.",
     "A good default: long enough to see a trend, detailed enough to spot a spike.")
 R("timeframe-1M", "Last month", "Shows the last 30 days, one candle per day.",
     "Each candle is a whole day, so you see the bigger picture and slow trends.")
-R("timeframe-ALL", "All history", "Shows everything we have stored, one candle per day.",
-    "History is kept for a limited time (see /stockist keep). Items you track are kept longest.")
-
 R("sma", "Moving average (SMA)", "The average of the last 7 candles, drawn as a smooth line.",
     "SMA stands for Simple Moving Average. It smooths out the ups and downs so you can see the "
     .. "direction. When the price is above this line, the recent trend is up; below it, down. "

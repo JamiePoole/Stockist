@@ -88,5 +88,5 @@ function Util.BarWidth(points, xs, explicit)
         if dx > 0 and (not best or dx < best) then best = dx end
     end
     if not best then return 8 end
-    return Util.Clamp(best * 0.7, 1, 40)
+    return Util.Clamp(best * 0.7, 2, 40)
 end

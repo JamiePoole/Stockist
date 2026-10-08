@@ -181,8 +181,12 @@ local function drawAxes(model, canvas)
     end
 
     -- Horizontal grid and y labels, per pane
-    for _, pane in ipairs(model.panes) do
+    for i, pane in ipairs(model.panes) do
         local r = pane.rect
+        -- Divider in the gap between stacked panes, full width so it also crosses the label gutter.
+        if i < #model.panes then
+            canvas:line(0, r.y - PANE_GAP / 2, model.w, r.y - PANE_GAP / 2, t.axis, 1)
+        end
         canvas:line(r.x, r.y, r.x, r.y + r.h, t.axis, 1)
         if pane.def.title then
             canvas:text(r.x + 6, r.y + r.h - 4, pane.def.title, { t.text[1], t.text[2], t.text[3], 0.6 }, "TOPLEFT")

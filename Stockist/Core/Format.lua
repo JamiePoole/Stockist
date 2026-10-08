@@ -16,6 +16,30 @@ function Format.Money(copper)
     return table.concat(parts, " ")
 end
 
+-- Coin colours as in the game's money display.
+local GOLD, SILVER, COPPER = { 1, 0.82, 0 }, { 0.78, 0.78, 0.81 }, { 0.93, 0.65, 0.37 }
+
+--- Like Money, but each part carries its coin colour: gold, silver and copper.
+function Format.MoneyColored(copper)
+    local c = math.floor(copper + 0.5)
+    local g = math.floor(c / 10000)
+    local s = math.floor((c % 10000) / 100)
+    local cc = c % 100
+    local parts = {}
+    if g > 0 then parts[#parts + 1] = Format.Colored(g .. "g", GOLD[1], GOLD[2], GOLD[3]) end
+    if s > 0 then parts[#parts + 1] = Format.Colored(s .. "s", SILVER[1], SILVER[2], SILVER[3]) end
+    if cc > 0 or #parts == 0 then parts[#parts + 1] = Format.Colored(cc .. "c", COPPER[1], COPPER[2], COPPER[3]) end
+    return table.concat(parts, " ")
+end
+
+--- Money for on-screen text: the game's own coin icons when available, coloured g/s/c otherwise.
+function Format.MoneyDisplay(copper)
+    if GetCoinTextureString then
+        return GetCoinTextureString(math.floor(copper + 0.5))
+    end
+    return Format.MoneyColored(copper)
+end
+
 --- Up to two decimals, trailing zeros dropped: 12.5 -> "12.5", 12 -> "12".
 function Format.Number(n)
     local s = ("%.2f"):format(n)

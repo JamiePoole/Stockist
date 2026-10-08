@@ -256,6 +256,32 @@ test("candles and bars at the first and last point stay inside the plot", functi
     end
 end)
 
+test("a candle with no price movement is still drawn as a visible dash", function()
+    local C = ns().Charts
+    local model = C.Build({ series = { { type = "candle", points = { { x = 1, o = 5, h = 5, l = 5, c = 5 },
+        { x = 2, o = 5, h = 8, l = 4, c = 7 } } } } }, 300, 200)
+    local canvas = new_recording_canvas()
+    C.Draw(model, canvas)
+    local flat = canvas:find("rect", function(o) return o.w < 100 end)[1]
+    eq(flat.h >= 2, true)
+end)
+
+test("stacked panes are separated by a full-width divider", function()
+    local C = ns().Charts
+    local model = C.Build({
+        panes = {
+            { id = "a", series = { { type = "line", points = linePoints(4, function(i) return i end) } } },
+            { id = "b", series = { { type = "bar", points = linePoints(4, function(i) return i end) } } },
+        },
+    }, 400, 300)
+    local canvas = new_recording_canvas()
+    C.Draw(model, canvas)
+    local dividers = canvas:find("line", function(o) return o.y1 == o.y2 and o.x1 == 0 and o.x2 == 400 end)
+    eq(#dividers, 1)
+    local gapTop, gapBottom = model.panes[1].rect.y, model.panes[2].rect.y + model.panes[2].rect.h
+    eq(dividers[1].y1 < gapTop and dividers[1].y1 > gapBottom, true, "sits in the gap between the panes")
+end)
+
 test("a single candle is centred in the plot", function()
     local C = ns().Charts
     local model = C.Build({ series = { { type = "candle", points = { { x = 500, o = 1, h = 3, l = 1, c = 2 } } } } }, 300, 200)

@@ -25,7 +25,9 @@ Charts.series:Register("candle", {
                 local top, bottom = math.max(yo, yc), math.min(yo, yc)
                 ctx.canvas:line(x, Util.Clamp(ctx.ys:Map(p.h), lo, hi),
                     x, Util.Clamp(ctx.ys:Map(p.l), lo, hi), color, 1)
-                ctx.canvas:rect(x - bw / 2, bottom, bw, math.max(1, top - bottom), color)
+                -- A candle whose open and close match has no height; keep it a visible 2px dash.
+                local height = math.max(2, top - bottom)
+                ctx.canvas:rect(x - bw / 2, bottom - (height - (top - bottom)) / 2, bw, height, color)
             end
         end
     end,

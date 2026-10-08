@@ -57,6 +57,22 @@ test("Format.ColorCode and Colored", function()
     eq(S.Format.Colored("Linen", 1, 1, 1), "|cffffffffLinen|r")
 end)
 
+test("Format.MoneyColored colours gold, silver and copper separately", function()
+    local S = ns()
+    local m = S.Format.MoneyColored(123456)
+    eq(m, "|cffffd100" .. "12g|r |cffc7c7cf34s|r |cffeda65e56c|r")
+    eq(S.Format.MoneyColored(120000), "|cffffd10012g|r")
+    eq(S.Format.MoneyColored(0), "|cffeda65e0c|r")
+end)
+
+test("Format.MoneyDisplay uses the game's coin icons when they exist, coloured text otherwise", function()
+    local S = ns()
+    eq(S.Format.MoneyDisplay(50), S.Format.MoneyColored(50))
+    GetCoinTextureString = function(c) return "icons:" .. c end
+    eq(S.Format.MoneyDisplay(12345.4), "icons:12345")
+    GetCoinTextureString = nil
+end)
+
 test("ColoredName wraps a cached item in its rarity colour", function()
     local S = ns()
     ITEM_QUALITY_COLORS = { [2] = { r = 0.12, g = 1, b = 0 } }

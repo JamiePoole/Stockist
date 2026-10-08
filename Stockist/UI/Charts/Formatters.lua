@@ -19,7 +19,8 @@ F:Register("time", function(v, ctx)
     if ctx.long then
         return daily and fmt("%a %d %b", v) or fmt("%d %b %H:%M", v)
     end
-    if not daily and span <= 2 * 86400 then return fmt("%H:%M", v) end
-    if span <= 150 * 86400 then return fmt("%d %b", v) end
+    if not daily and span <= 2 * 86400 then return fmt("%H:%M", v) end -- a day: hours
+    if span <= 14 * 86400 then return fmt("%a %d", v) end              -- a week: "Wed 08"
+    if span <= 150 * 86400 then return fmt("%d %b", v) end             -- a month: "08 Oct"
     return fmt("%b %Y", v)
 end)

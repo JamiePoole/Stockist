@@ -51,6 +51,68 @@ test("1D plots one point per scan, so two scans in the same hour are two points"
     eq(week.note ~= nil, true)
 end)
 
+test("each scope's x axis covers its whole window, however little data there is", function()
+    local S = setup()
+    local store = S.ReadingStore.New({})
+    local now = 40 * DAY
+    for i = 0, 5 do store:Add({ item = 4, ts = now - 3600 + i * 600, price = 100 + i, qty = 5 }) end
+    for key, span in pairs({ ["1D"] = DAY, ["1W"] = 7 * DAY, ["1M"] = 30 * DAY }) do
+        local x = S.PriceChart.BuildConfig(store, 4, key, {}, now, 0).x
+        eq(x.range[1], now - span, key .. " start")
+        eq(x.range[2], now, key .. " end")
+    end
+    eq(#S.PriceChart.TIMEFRAMES, 3, "ALL is not offered yet")
+end)
+
+test("the axis labels follow the scope: hours, day names, dates", function()
+    local S = setup()
+    local store = S.ReadingStore.New({})
+    local now = 40 * DAY
+    for i = 0, 5 do store:Add({ item = 4, ts = now - 3600 + i * 600, price = 100 + i, qty = 5 }) end
+    local function xLabels(key)
+        local model = S.Charts.Build(S.PriceChart.BuildConfig(store, 4, key, {}, now, 0), 640, 360)
+        local canvas = new_recording_canvas()
+        S.Charts.Draw(model, canvas)
+        local out = {}
+        for _, t in ipairs(canvas:find("text", function(o) return o.anchor == "TOP" end)) do out[#out + 1] = t.str end
+        return out
+    end
+    for _, s in ipairs(xLabels("1D")) do eq(s:match("^%d%d:%d%d$") ~= nil, true, "1D hour label " .. s) end
+    local week = xLabels("1W")
+    eq(#week >= 5, true)
+    for _, s in ipairs(week) do eq(s:match("^%a%a%a %d%d$") ~= nil, true, "1W day-name label " .. s) end
+    local month = xLabels("1M")
+    for _, s in ipairs(month) do eq(s:match("^%d%d %a%a%a$") ~= nil, true, "1M date label " .. s) end
+end)
+
+test("the chart is transparent so it inherits the window background", function()
+    local S = setup()
+    local store = S.ReadingStore.New({})
+    store:Add({ item = 4, ts = 40 * DAY, price = 100, qty = 5 })
+    local config = S.PriceChart.BuildConfig(store, 4, "1D", {}, 40 * DAY, 0)
+    eq(config.transparent, true)
+    local canvas = new_recording_canvas()
+    S.Charts.Draw(S.Charts.Build(config, 640, 360), canvas)
+    local full = canvas:find("rect", function(o) return o.w >= 640 and o.h >= 360 end)
+    eq(#full, 0, "no full-size background rectangle")
+end)
+
+test("HeaderParts and MetaText describe the latest reading", function()
+    local S, store, now = setup()
+    local parts = S.PriceChart.HeaderParts(store, 7, now)
+    eq(parts.price, 340)
+    eq(parts.age, 0)
+    eq(parts.change > 0, true)
+    is_nil(S.PriceChart.HeaderParts(store, 999, now))
+    local text = S.PriceChart.MetaText(parts)
+    eq(text:find("24h", 1, true) ~= nil, true)
+    eq(text:find("updated just now", 1, true) ~= nil, true)
+    eq(text:find("|cff33c773", 1, true) ~= nil, true, "a rise is green")
+    local down = S.PriceChart.MetaText({ change = -2, age = 120 })
+    eq(down:find("|cffeb4d4d", 1, true) ~= nil, true, "a fall is red")
+    eq(S.PriceChart.MetaText({ age = 3000 }), "updated 50m ago", "no change shown when unknown")
+end)
+
 test("a month view with a single day of history falls back to finer detail and says so", function()
     local S = setup()
     local store = S.ReadingStore.New({})
@@ -81,7 +143,7 @@ test("the fallback note is drawn on the chart", function()
     local store = S.ReadingStore.New({})
     local now = 40 * DAY + 5 * HOUR
     for i = 0, 7 do store:Add({ item = 4, ts = now - 2 * HOUR + i * 900, price = 100 + i, qty = 5 }) end
-    local model = S.Charts.Build(S.PriceChart.BuildConfig(store, 4, "ALL", {}, now, 0), 640, 360)
+    local model = S.Charts.Build(S.PriceChart.BuildConfig(store, 4, "1M", {}, now, 0), 640, 360)
     local canvas = new_recording_canvas()
     S.Charts.Draw(model, canvas)
     local notes = canvas:find("text", function(o) return o.anchor == "TOPRIGHT" end)

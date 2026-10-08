@@ -80,17 +80,16 @@ function Window.Create(opts)
     close:SetScript("OnClick", function() frame:Hide() end)
 
     -- Tutorial mode is one account-wide setting shared by every window and tooltip.
-    local help = CreateFrame("Button", nil, frame)
+    local help = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
     help:SetSize(22, 22)
     help:SetPoint("RIGHT", close, "LEFT", -2, 0)
-    local helpText = help:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-    helpText:SetAllPoints()
-    helpText:SetText("?")
+    help:SetText("?")
     local function paintHelp()
+        local fs = help:GetFontString()
         if Stockist.Help.TutorialEnabled() then
-            helpText:SetTextColor(0.3, 1, 0.5)
+            fs:SetTextColor(0.3, 1, 0.5)
         else
-            helpText:SetTextColor(0.6, 0.6, 0.6)
+            fs:SetTextColor(0.7, 0.7, 0.7)
         end
     end
     help:SetScript("OnClick", function()
