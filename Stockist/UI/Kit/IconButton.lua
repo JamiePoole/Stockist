@@ -10,17 +10,18 @@ Stockist.UI = UI
 local IconButton = {}
 UI.IconButton = IconButton
 
--- Segments are { x1, y1, x2, y2 } in pixels from the button's centre (x right, y up), inside +/-7.
+-- Segments are { x1, y1, x2, y2 } in whole pixels from the button's centre (x right, y up).
 IconButton.ICONS = {
     -- "Open in a new window": a square with its top-right corner open and an arrow leaving through it.
+    -- Drawn on a 10px grid (+/-5).
     popout = {
-        { -6, -6, -6, 3 },  -- square: left
-        { -6, -6, 3, -6 },  -- bottom
-        { -6, 3, -1, 3 },   -- top, stopping short of the corner
-        { 3, -6, 3, -1 },   -- right, stopping short of the corner
-        { -1, -1, 6, 6 },   -- arrow shaft
-        { 6, 6, 1, 6 },     -- arrowhead
-        { 6, 6, 6, 1 },
+        { -5, -5, -5, 2 },  -- square: left
+        { -5, -5, 2, -5 },  -- bottom
+        { -5, 2, -1, 2 },   -- top, stopping short of the corner
+        { 2, -5, 2, -1 },   -- right, stopping short of the corner
+        { -1, -1, 5, 5 },   -- arrow shaft
+        { 5, 5, 1, 5 },     -- arrowhead
+        { 5, 5, 5, 1 },
     },
 }
 

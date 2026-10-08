@@ -220,13 +220,18 @@ test("the pop-out icon is a square with an arrow leaving its corner, inside the 
     local S = setup()
     local icon = S.UI.IconButton.ICONS.popout
     eq(#icon, 7, "four sides of the square, a shaft and two arrowhead strokes")
+    local extent = 0
     for _, s in ipairs(icon) do
-        for _, v in ipairs(s) do eq(math.abs(v) <= 7, true, "inside the button: " .. v) end
+        for _, v in ipairs(s) do
+            eq(v == math.floor(v), true, "whole pixels, so lines stay crisp: " .. v)
+            extent = math.max(extent, math.abs(v))
+        end
     end
+    eq(extent, 5, "the icon spans 10px (it was 12px)")
     local tip = icon[5]
-    eq(tip[3], 6); eq(tip[4], 6, "the arrow points to the top-right")
+    eq(tip[3], 5); eq(tip[4], 5, "the arrow points to the top-right")
     -- the square is open at the top-right: neither the top nor the right side reaches the corner
-    eq(icon[3][3] < 3, true); eq(icon[4][4] < 3, true)
+    eq(icon[3][3] < 2, true); eq(icon[4][4] < 2, true)
     Fake.uninstall()
 end)
 
@@ -235,7 +240,7 @@ test("an icon button draws its segments, highlights on hover and rejects unknown
     local b = S.UI.IconButton.Create(UIParent, { icon = "popout", width = 24, height = 20 })
     eq(#b.lines, 7)
     eq(b.lines[1].startPoint[1], "CENTER")
-    eq(b.lines[5].endPoint[3], 6); eq(b.lines[5].endPoint[4], 6)
+    eq(b.lines[5].endPoint[3], 5); eq(b.lines[5].endPoint[4], 5)
     local normal = { b.lines[1].color[1], b.lines[1].color[2], b.lines[1].color[3] }
     Fake.fire(b, "OnEnter")
     eq(b.lines[1].color[1], 1); eq(b.lines[1].color[3], 0, "gold while hovered")
