@@ -30,4 +30,6 @@ R("tutorial", "Tutorial tips", "Turns the longer explanations on or off.",
 R("legend", "Reading the chart",
     "Candle: thick part = first to last price, thin line = lowest to highest. Green = price rose, red = fell. "
     .. "Bars below = how many are listed for sale.",
-    "A candle with a single reading is just a flat dash. It grows as more scans land in the same hour.")
+    "A candle with a single reading is just a flat dash; it grows as more scans land in the same hour. "
+    .. "If you cannot see a thin line sticking out, the price never went past the thick part: the "
+    .. "bright line down the middle of the thick part is the thin line.")

@@ -79,7 +79,8 @@ function Util.Decimate(points, maxPoints)
     return out
 end
 
---- Width in pixels for bars/candles: 70% of the closest spacing between visible points.
+--- Width in pixels for bars/candles: 60% of the closest spacing between points, kept between 2 and
+--- 16px so a few sparse candles do not turn into fat blocks.
 function Util.BarWidth(points, xs, explicit)
     if explicit then return explicit end
     local best
@@ -88,5 +89,5 @@ function Util.BarWidth(points, xs, explicit)
         if dx > 0 and (not best or dx < best) then best = dx end
     end
     if not best then return 8 end
-    return Util.Clamp(best * 0.7, 2, 40)
+    return Util.Clamp(best * 0.6, 2, 16)
 end

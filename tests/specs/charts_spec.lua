@@ -228,10 +228,58 @@ test("candles are coloured by direction and have a wick and a body", function()
     local canvas = new_recording_canvas()
     C.Draw(model, canvas)
     eq(canvas:count("line"), 2)
+    local wicks = canvas:find("line")
     local bodies = canvas:find("rect", function(o) return o.w < 100 end)
     eq(#bodies, 2)
-    eq(bodies[1].color, model.theme.up)
-    eq(bodies[2].color, model.theme.down)
+    local function sameHue(a, b) return a[1] == b[1] and a[2] == b[2] and a[3] == b[3] end
+    eq(sameHue(bodies[1].color, model.theme.up), true, "up body")
+    eq(sameHue(bodies[2].color, model.theme.down), true, "down body")
+    eq(sameHue(wicks[1].color, model.theme.up), true, "up wick")
+    eq(sameHue(wicks[2].color, model.theme.down), true, "down wick")
+end)
+
+test("the body is see-through and the wick solid, so the wick shows even inside the body", function()
+    local C = ns().Charts
+    -- opens at the high and closes at the low: the body covers the whole range, no wick sticks out
+    local model = C.Build({ minimal = true, series = { { type = "candle", points = {
+        { x = 100, o = 434, h = 434, l = 200, c = 200 },
+        { x = 200, o = 300, h = 310, l = 290, c = 305 },
+    } } } }, 300, 100)
+    local canvas = new_recording_canvas()
+    C.Draw(model, canvas)
+    for _, b in ipairs(canvas:find("rect", function(o) return o.w < 100 end)) do
+        eq(b.color[4] < 1, true, "body alpha " .. b.color[4])
+    end
+    for _, w in ipairs(canvas:find("line")) do
+        eq(w.color[4], 1, "wick alpha")
+    end
+    local first = canvas:find("line")[1]
+    local body = canvas:find("rect", function(o) return o.w < 100 end)[1]
+    eq(first.x1, body.x + body.w / 2, "wick is down the middle of the body")
+    -- the wick spans exactly the body here (open = high, close = low), so it is only visible through it
+    near(math.max(first.y1, first.y2), body.y + body.h, 1e-6)
+    near(math.min(first.y1, first.y2), body.y, 1e-6)
+end)
+
+test("supply bars are semi-transparent so they do not overpower the price", function()
+    local C = ns().Charts
+    local model = C.Build({ minimal = true, series = { { type = "bar", points = { { x = 1, y = 5 }, { x = 2, y = 9, up = false } } } } }, 200, 100)
+    local canvas = new_recording_canvas()
+    C.Draw(model, canvas)
+    for _, b in ipairs(canvas:find("rect", function(o) return o.w < 100 end)) do
+        near(b.color[4], 0.55, 1e-9)
+    end
+end)
+
+test("candles are narrow: at most 16px however few there are", function()
+    local C = ns().Charts
+    local model = C.Build({ minimal = true, series = { { type = "candle", points = {
+        { x = 0, o = 1, h = 2, l = 1, c = 2 }, { x = 3600, o = 2, h = 3, l = 2, c = 3 } } } } }, 600, 200)
+    local canvas = new_recording_canvas()
+    C.Draw(model, canvas)
+    for _, b in ipairs(canvas:find("rect", function(o) return o.w < 100 end)) do
+        eq(b.w <= 16, true, "width " .. b.w)
+    end
 end)
 
 test("candles and bars at the first and last point stay inside the plot", function()
