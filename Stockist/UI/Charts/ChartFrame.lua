@@ -26,7 +26,7 @@ function Charts.Create(parent, config)
         dirty = true,
     }, Chart)
 
-    frame:EnableMouse(true)
+    frame:EnableMouse(not (config and config.static))
     frame:SetScript("OnSizeChanged", function() chart.dirty = true end)
     frame:SetScript("OnLeave", function()
         chart.lastX, chart.lastY = nil, nil
@@ -38,6 +38,7 @@ end
 
 function Chart:SetConfig(config)
     self.config = config
+    self.frame:EnableMouse(not config.static)
     self.dirty = true
 end
 
@@ -61,7 +62,7 @@ function Chart:OnUpdate()
         Charts.Draw(self.model, self.main)
         self.lastX, self.lastY = nil, nil -- force the hover layer to repaint over the new drawing
     end
-    if not self.model then return end
+    if not self.model or self.config.static then return end -- static: drawn once, no cursor or tooltip
     local x, y = self:CursorPosition()
     if x ~= self.lastX or y ~= self.lastY then
         self.lastX, self.lastY = x, y

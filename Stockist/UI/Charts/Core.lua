@@ -6,7 +6,7 @@ local Util = Charts.Util
 
 -- Config:
 --   {
---     theme = "dark", minimal = false (no axes or padding: sparklines), padding = {left,right,top,bottom},
+--     static = true (no cursor, crosshair or tooltip; the frame ignores the mouse), theme = "dark", minimal = false (no axes or padding: sparklines), padding = {left,right,top,bottom},
 --     x = { format = "time", range = {min, max}?, tzOffset = seconds?, resolution = seconds per data point?,
 --           ticks = { explicit tick values }? },
 --     panes = {

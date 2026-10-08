@@ -100,3 +100,11 @@ end
 function Format.Percent(p)
     return ("%+.2f%%"):format(p)
 end
+
+--- The same, coloured: green above zero, red below, grey for none. Nil gives "".
+function Format.Change(p)
+    if p == nil then return "" end
+    local r, g, b = 0.6, 0.6, 0.6
+    if p > 0 then r, g, b = 0.2, 0.78, 0.45 elseif p < 0 then r, g, b = 0.92, 0.3, 0.3 end
+    return Format.Colored(Format.Percent(p), r, g, b)
+end
