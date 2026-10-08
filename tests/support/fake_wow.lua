@@ -62,7 +62,13 @@ local function trackedMethods()
             self.points[#self.points + 1] = { ... }
         end,
         ClearAllPoints = function(self) self.points = {} end,
-        GetStringWidth = function(self) return 6 * #(self.text or "") end,
+        -- Colour codes take no room and an inline icon (|T...|t) about 14px, as in the game.
+        GetStringWidth = function(self)
+            local text = (self.text or ""):gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")
+            local icons
+            text, icons = text:gsub("|T.-|t", "")
+            return 6 * #text + 14 * icons
+        end,
         GetStringHeight = function(self)
             local _, lines = (self.text or ""):gsub("\n", "")
             return 12 * (lines + 1)

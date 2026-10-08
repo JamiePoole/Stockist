@@ -204,6 +204,15 @@ function PriceChart.MetaText(parts)
     return table.concat(pieces, "   ")
 end
 
+--- The header text after the price, fullest first, for a panel to pick from by the room it has:
+--- "+3.10% 24h   updated 12m ago", then just "+3.10% 24h" (when there is a 24h move), then nothing.
+function PriceChart.MetaChoices(parts)
+    local choices = { PriceChart.MetaText(parts) }
+    if parts.change then choices[#choices + 1] = Format.Change(parts.change) .. " 24h" end
+    choices[#choices + 1] = ""
+    return choices
+end
+
 ---------------------------------------------------------------------------------------------------
 -- Window (game only): the chart panel (Features/ChartPanel.lua) in its own movable window
 ---------------------------------------------------------------------------------------------------
