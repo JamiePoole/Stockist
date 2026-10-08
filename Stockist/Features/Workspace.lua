@@ -93,10 +93,9 @@ local function build()
 end
 
 --- Open the workspace. `itemID` (optional) is selected in the "A" link group; otherwise the group keeps
---- its item, falling back to the item we hold the most history for.
+--- whatever it had. With nothing chosen yet the chart stays empty until the player picks an item.
 function Workspace.Show(itemID)
     if not win then build() end
-    itemID = itemID or Stockist.Link.Get("A") or (Stockist.RichestItem and Stockist.RichestItem())
     if itemID then Stockist.Link.Select("A", itemID) end
     win.frame:Show()
     layoutCells()

@@ -178,10 +178,17 @@ test("reopening reuses the window and keeps the group's item unless told otherwi
     Fake.uninstall()
 end)
 
-test("with no item given and none selected, it picks the item with the most history", function()
+test("with no item given and none selected, nothing is charted until the player picks one", function()
     local S = setup()
     S.Workspace.Show()
-    eq(S.Link.Get("A"), 7)
+    eq(S.Link.Get("A"), nil, "even though there is data to show")
+    local message
+    for _, o in ipairs(Fake.objects) do
+        if o.kind == "FontString" and o.text and o.text:find("No item selected", 1, true) then message = o end
+    end
+    eq(message ~= nil, true, "the chart cell says no item is selected")
+    S.Link.Select("A", 8)
+    eq(message.shown, false, "picking one (a watchlist click, say) replaces the message with the chart")
     Fake.uninstall()
 end)
 
