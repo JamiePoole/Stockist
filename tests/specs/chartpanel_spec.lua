@@ -78,30 +78,40 @@ test("the scope buttons change the chart and show the chosen one as pressed", fu
     Fake.uninstall()
 end)
 
-test("the active scope looks selected, not disabled: blue, white text, no hover or press, tooltip kept", function()
+test("the active scope keeps the button art but recoloured blue, with white text and no mouse effects", function()
     local S = setup()
     local panel = S.ChartPanel.Create(UIParent)
     panel:SetItem(7)
     local active, other = panel.tfButtons["1D"], panel.tfButtons["1W"]
 
     eq(active.enabled, true, "still enabled, so its tooltip works")
-    eq(active.selectedFill.shown, true, "blue fill")
-    eq(active.selectedFill.color[3] > active.selectedFill.color[1], true, "the fill is blue")
+    for _, key in ipairs({ "Left", "Middle", "Right" }) do
+        local tex = active[key]
+        eq(tex.desaturated, true, key .. " is desaturated first, so the shading is kept")
+        eq(tex.vertexColor[3] > tex.vertexColor[1], true, key .. " is tinted blue")
+    end
     local text = active:GetFontString().textColor
-    eq(text[1] == 1 and text[2] == 1 and text[3] == 1, true, "white text on the blue fill")
+    eq(text[1] == 1 and text[2] == 1 and text[3] == 1, true, "white text")
     eq(active:GetHighlightTexture().alpha, 0, "no hover effect")
     eq(active:GetPushedTexture().alpha, 0, "no pressed effect")
+    eq(active.pushedTextOffset[1], 0); eq(active.pushedTextOffset[2], 0, "the label does not indent")
+    eq(#active.clickButtons, 0, "it takes no clicks, so it never enters the pressed state")
 
     eq(other.enabled, true)
-    eq(other.selectedFill.shown, false, "inactive scopes have no fill")
+    for _, key in ipairs({ "Left", "Middle", "Right" }) do
+        eq(other[key].desaturated, false, "inactive scopes keep the stock red art")
+        eq(other[key].vertexColor[1] == 1 and other[key].vertexColor[2] == 1 and other[key].vertexColor[3] == 1, true)
+    end
     local gold = other:GetFontString().textColor
     eq(gold[1] == 1 and gold[2] == 0.82 and gold[3] == 0, true, "inactive scopes keep the normal gold text")
     eq(other:GetHighlightTexture().alpha, 1, "inactive scopes keep their hover effect")
     eq(other:GetPushedTexture().alpha, 1)
+    eq(other.pushedTextOffset[1], 1); eq(other.pushedTextOffset[2], -1, "the stock indent on press")
+    eq(other.clickButtons[1], "LeftButtonUp")
     Fake.uninstall()
 end)
 
-test("clicking the active scope does nothing, and the highlight moves when the scope changes", function()
+test("clicking the active scope does nothing, and the blue moves when the scope changes", function()
     local S = setup()
     local panel = S.ChartPanel.Create(UIParent)
     panel:SetItem(7)
@@ -110,9 +120,13 @@ test("clicking the active scope does nothing, and the highlight moves when the s
     eq(panel.chart.config, drawn, "no redraw for a click on the active scope")
 
     Fake.fire(panel.tfButtons["1M"], "OnClick")
-    eq(panel.tfButtons["1M"].selectedFill.shown, true)
-    eq(panel.tfButtons["1D"].selectedFill.shown, false, "the old one is released")
-    eq(panel.tfButtons["1D"]:GetHighlightTexture().alpha, 1, "and gets its hover effect back")
+    eq(S.UI.Button.IsSelected(panel.tfButtons["1M"]), true)
+    eq(S.UI.Button.IsSelected(panel.tfButtons["1D"]), false, "the old one is released")
+    eq(panel.tfButtons["1M"].Left.desaturated, true)
+    eq(panel.tfButtons["1D"].Left.desaturated, false, "and has its red art back")
+    eq(panel.tfButtons["1D"]:GetHighlightTexture().alpha, 1, "and its hover effect")
+    eq(panel.tfButtons["1D"].clickButtons[1], "LeftButtonUp", "and can be clicked again")
+    eq(panel.tfButtons["1D"].pushedTextOffset[2], -1)
     Fake.uninstall()
 end)
 
@@ -123,11 +137,13 @@ test("scope buttons go back to normal when a message replaces the chart", functi
     panel:SetItem(9)
     for key, btn in pairs(panel.tfButtons) do
         eq(btn.enabled, false, key .. " is unavailable while there is nothing to chart")
-        eq(btn.selectedFill.shown, false, key .. " is not shown as selected")
+        eq(S.UI.Button.IsSelected(btn), false, key .. " is not shown as selected")
+        eq(btn.Left.desaturated, false, key .. " has the stock art")
     end
     panel:SetItem(7)
     for key, btn in pairs(panel.tfButtons) do eq(btn.enabled, true, key .. " is usable again") end
-    eq(panel.tfButtons["1D"].selectedFill.shown, true)
+    eq(S.UI.Button.IsSelected(panel.tfButtons["1D"]), true)
+    eq(panel.tfButtons["1D"].Left.desaturated, true)
     Fake.uninstall()
 end)
 

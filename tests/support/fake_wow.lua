@@ -24,6 +24,16 @@ local function trackedMethods()
         SetAlpha = function(self, a) self.alpha = a end,
         SetColorTexture = function(self, r, g, b, a) self.color = { r, g, b, a } end,
         SetTextColor = function(self, r, g, b, a) self.textColor = { r, g, b, a } end,
+        SetDesaturated = function(self, v) self.desaturated = v and true or false end,
+        SetVertexColor = function(self, r, g, b, a) self.vertexColor = { r, g, b, a } end,
+        GetObjectType = function(self) return self.kind end,
+        RegisterForClicks = function(self, ...) self.clickButtons = { ... } end,
+        SetPushedTextOffset = function(self, x, y) self.pushedTextOffset = { x, y } end,
+        GetRegions = function(self) return unpack(self.regions or {}) end,
+        GetNormalTexture = function(self)
+            self.normalTexture = self.normalTexture or Fake.new("Texture", self)
+            return self.normalTexture
+        end,
         SetStartPoint = function(self, ...) self.startPoint = { ... } end,
         SetEndPoint = function(self, ...) self.endPoint = { ... } end,
         SetScript = function(self, name, fn) self.scripts[name] = fn end,
@@ -134,8 +144,13 @@ function Fake.install()
     tinsert = table.insert
     GetCursorPosition = function() return 0, 0 end
     Fake.frames = {} -- every frame created through CreateFrame, in order
-    CreateFrame = function(kind, name, parent)
+    CreateFrame = function(kind, name, parent, template)
         local o = Fake.new(kind, parent)
+        if template == "UIPanelButtonTemplate" then
+            -- the stock button's body: left cap, middle, right cap (also listed as regions)
+            o.Left, o.Middle, o.Right = Fake.new("Texture", o), Fake.new("Texture", o), Fake.new("Texture", o)
+            o.regions = { o.Left, o.Middle, o.Right }
+        end
         if name then _G[name] = o end
         Fake.frames[#Fake.frames + 1] = o
         return o
