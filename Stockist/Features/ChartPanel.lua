@@ -12,6 +12,7 @@ Stockist.ChartPanel = ChartPanel
 
 local LEGEND_GAP = 12 -- empty space between the chart and the legend below it
 local HEADER_MARGIN = 10 -- clear space kept between the header text and the buttons
+local UNDERLINE_REST, UNDERLINE_HOVER = 0.35, 0.95 -- the underline that marks the item name as clickable
 
 --- A switch button: coloured while on (and usable), plain while off, greyed text when it cannot be used.
 local function paintToggle(btn, on, enabled)
@@ -68,10 +69,20 @@ function ChartPanel.Create(parent, opts)
     self.nameHit = CreateFrame("Frame", nil, frame)
     self.nameHit:SetPoint("TOPLEFT", self.nameText, "TOPLEFT")
     self.nameHit:EnableMouse(true)
+    -- A thin underline says "this is clickable"; it brightens under the mouse.
+    self.nameUnderline = self.nameHit:CreateTexture(nil, "OVERLAY")
+    self.nameUnderline:SetHeight(1)
+    self.nameUnderline:SetPoint("BOTTOMLEFT", 0, -1)
+    self.nameUnderline:SetPoint("BOTTOMRIGHT", 0, -1)
+    self.nameUnderline:SetColorTexture(0.6, 0.8, 1, UNDERLINE_REST)
     self.nameHit:SetScript("OnEnter", function(hit)
+        self.nameUnderline:SetColorTexture(0.6, 0.8, 1, UNDERLINE_HOVER)
         if self.state.itemID and self.statusKind ~= "notfound" then showItemTooltip(hit, self.state.itemID) end
     end)
-    self.nameHit:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    self.nameHit:SetScript("OnLeave", function()
+        self.nameUnderline:SetColorTexture(0.6, 0.8, 1, UNDERLINE_REST)
+        GameTooltip:Hide()
+    end)
     -- Clicking the name opens the item picker under it.
     self.nameHit:SetScript("OnMouseUp", function(hit)
         GameTooltip:Hide()

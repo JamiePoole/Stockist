@@ -71,7 +71,9 @@ local function build()
     layout = Workspace.LAYOUTS[Workspace.DEFAULT_LAYOUT]
     win = Stockist.UI.Window.Create({
         name = "StockistWorkspace", title = "Stockist", width = 1040, height = 640, minWidth = 700, minHeight = 460,
+        search = true, -- an item search box in the middle of the title bar
     })
+    Stockist.ItemPicker.Attach(win.searchBox, function(itemID) Stockist.Link.Select("A", itemID) end)
     cells = {}
     for i, def in ipairs(layout.cells) do
         local frame = CreateFrame("Frame", nil, win.content)

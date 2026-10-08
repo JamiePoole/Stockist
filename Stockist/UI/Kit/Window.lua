@@ -110,6 +110,25 @@ function Window.Create(opts)
     Stockist.Events:On("TUTORIAL_CHANGED", paintHelp)
     paintHelp()
 
+    -- Optional search box in the middle of the title bar (opts.search). The caller wires it up, for example
+    -- with Stockist.ItemPicker.Attach(win.searchBox, onPick).
+    local search
+    if opts.search then
+        search = CreateFrame("EditBox", nil, frame, "InputBoxTemplate")
+        search:SetAutoFocus(false)
+        search:SetSize(280, 20)
+        search:SetPoint("TOP", frame, "TOP", 0, -2)
+        search:SetFrameLevel(bar:GetFrameLevel() + 10)
+        local placeholder = search:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+        placeholder:SetPoint("LEFT", 2, 0)
+        placeholder:SetText("Search items")
+        local function paint() placeholder:SetShown(search:GetText() == "" and not search:HasFocus()) end
+        search:HookScript("OnTextChanged", paint)
+        search:HookScript("OnEditFocusGained", paint)
+        search:HookScript("OnEditFocusLost", paint)
+        paint()
+    end
+
     local content = CreateFrame("Frame", nil, frame)
     content:SetPoint("TOPLEFT", 8, -TITLE_HEIGHT - 4)
     content:SetPoint("BOTTOMRIGHT", -8, 8)
@@ -129,5 +148,5 @@ function Window.Create(opts)
     if opts.name then tinsert(UISpecialFrames, opts.name) end -- Esc closes it
     frame:Hide()
 
-    return { frame = frame, content = content, title = title, helpButton = help }
+    return { frame = frame, content = content, title = title, helpButton = help, searchBox = search }
 end

@@ -11,7 +11,7 @@ local FILES = {
     "UI/Charts/Theme.lua", "UI/Charts/Series/Line.lua", "UI/Charts/Series/Candle.lua", "UI/Charts/Series/Bar.lua",
     "UI/Charts/Overlays/Overlays.lua", "UI/Charts/Core.lua", "UI/Charts/FrameCanvas.lua", "UI/Charts/ChartFrame.lua",
     "UI/Kit/Tooltip.lua", "UI/Kit/Button.lua", "UI/Kit/IconButton.lua", "UI/Kit/Window.lua", "Features/PriceChart.lua",
-    "Features/ItemPicker.lua", "Features/ChartPanel.lua", "Features/StatusCommands.lua",
+    "Features/ItemPicker.lua", "Features/ChartPanel.lua", "Features/Workspace.lua", "Features/StatusCommands.lua",
 }
 
 local NAMES = { [7] = "Linen Cloth", [8] = "Mageweave Cloth", [9] = "Heart of Fire", [10] = "Wool Cloth", [50] = "Zesty Tea" }
@@ -256,5 +256,169 @@ test("/stockist chart <name> opens a single match, lists several, and says when 
     eq(out[#out]:find("no item with prices matches 'zzz'", 1, true) ~= nil, true)
     S.Commands:Dispatch("chart 8")
     eq(shown[2], 8, "an ID still works")
+    Fake.uninstall()
+end)
+
+-- Layout details -------------------------------------------------------------------------------------
+
+test("the popup sits a small gap below the item name, and the results start below the help text", function()
+    local S = setup()
+    local name = anchor()
+    S.ItemPicker.Show(name, function() end)
+    local ui = S.ItemPicker._debug()
+    local p = ui.popup.points[#ui.popup.points]
+    eq(p[2], name); eq(p[3], "BOTTOMLEFT")
+    eq(p[5], -4, "a few pixels of air between the name and the border")
+    local list = ui.list.points
+    eq(list[1][5], -50, "the list starts well below the help text (search box 8 + 20, hint ~12, margin)")
+    eq(ui.hint.shown, true); eq(ui.edit.shown, true)
+    Fake.uninstall()
+end)
+
+test("the scroll bar appears only when the list is longer than the window and follows the scrolling", function()
+    local S = setup()
+    S.ItemPicker.Show(anchor(), function() end)
+    local ui, state = S.ItemPicker._debug()
+    eq(ui.track.shown, false, "7 rows fit: no bar")
+    S.ItemPicker.Hide()
+    for id = 100, 140 do S.store:Add({ item = id, ts = NOON, price = 5, qty = 1 }) end
+    S.ItemPicker.Show(anchor(), function() end)
+    eq(ui.track.shown, true); eq(ui.thumb.shown, true)
+    local top0 = ui.thumb.points[#ui.thumb.points][5]
+    eq(top0, 0, "thumb at the top")
+    Fake.fire(ui.popup, "OnMouseWheel", -1); Fake.fire(ui.popup, "OnMouseWheel", -1)
+    eq(ui.thumb.points[#ui.thumb.points][5] < 0, true, "and it moves down as the list scrolls")
+    local right = ui.list.points[2][4]
+    eq(right, -16, "the rows leave room for the bar")
+    ui.edit:SetText("wool"); Fake.fire(ui.edit, "OnTextChanged", true)
+    eq(ui.track.shown, false, "gone again when the list is short")
+    eq(ui.list.points[2][4], -4)
+    Fake.uninstall()
+end)
+
+test("scroll bar maths: thumb size and position, and dragging", function()
+    local S = setup()
+    local P = S.ItemPicker
+    is_nil(P.Thumb(10, 12, 0, 240), "everything fits: no thumb")
+    local top, h = P.Thumb(48, 12, 0, 240)
+    eq(top, 0); eq(h, 60, "a quarter of the list is visible: a quarter of the track")
+    top = P.Thumb(48, 12, 36, 240)
+    eq(top, 180, "scrolled to the end: the thumb is at the bottom of the track")
+    top, h = P.Thumb(1000, 12, 0, 240)
+    eq(h, 16, "never smaller than a grab-able minimum")
+    eq(P.OffsetForDrag(48, 12, 240, 0, 90), 18, "half the free track is half the way")
+    eq(P.OffsetForDrag(48, 12, 240, 0, 9999), 36, "clamped to the end")
+    eq(P.OffsetForDrag(48, 12, 240, 10, -9999), 0, "and to the start")
+    eq(P.OffsetForDrag(5, 12, 240, 0, 50), 0, "nothing to scroll")
+    Fake.uninstall()
+end)
+
+test("dragging the thumb scrolls the list", function()
+    local S = setup()
+    for id = 100, 140 do S.store:Add({ item = id, ts = NOON, price = 5, qty = 1 }) end
+    S.ItemPicker.Show(anchor(), function() end)
+    local ui, state = S.ItemPicker._debug()
+    local y = 500
+    GetCursorPosition = function() return 0, y end
+    IsMouseButtonDown = function() return true end
+    Fake.fire(ui.thumb, "OnMouseDown")
+    y = 400 -- 100px down
+    Fake.fire(ui.thumb, "OnUpdate")
+    eq(state.offset > 0, true, "scrolled")
+    local mid = state.offset
+    y = 0
+    Fake.fire(ui.thumb, "OnUpdate")
+    eq(state.offset, #state.rows - 12, "dragged to the end")
+    Fake.fire(ui.thumb, "OnMouseUp")
+    y = 500
+    Fake.fire(ui.thumb, "OnUpdate")
+    eq(state.offset, #state.rows - 12, "released: no more dragging")
+    GetCursorPosition, IsMouseButtonDown = nil, nil
+    Fake.uninstall()
+end)
+
+test("the item name is underlined, brighter under the mouse", function()
+    local S = setup()
+    local panel = S.ChartPanel.Create(UIParent)
+    panel:SetItem(7)
+    local u = panel.nameUnderline
+    eq(u.color[4], 0.35, "a quiet underline at rest")
+    Fake.fire(panel.nameHit, "OnEnter")
+    eq(u.color[4], 0.95, "bright on hover")
+    Fake.fire(panel.nameHit, "OnLeave")
+    eq(u.color[4], 0.35)
+    Fake.uninstall()
+end)
+
+-- The title-bar search box ---------------------------------------------------------------------------
+
+local function titleSearch()
+    for _, o in ipairs(Fake.objects) do
+        if o.kind == "EditBox" and o.parent == StockistWorkspace then return o end
+    end
+end
+
+test("the workspace has a search box in its title bar; focusing it opens just the results under it", function()
+    local S = setup()
+    S.Workspace.Show()
+    local search = titleSearch()
+    eq(search ~= nil, true, "a search box in the title bar")
+    Fake.fire(search, "OnEditFocusGained")
+    eq(S.ItemPicker.IsShown(), true)
+    local ui = S.ItemPicker._debug()
+    eq(ui.edit.shown, false, "the popup's own box and hint are hidden")
+    eq(ui.hint.shown, false)
+    eq(ui.popup.points[#ui.popup.points][2], search, "anchored under the title-bar box")
+    eq(ui.list.points[1][5], -8, "results start near the top, with no search box inside")
+    eq(#shownLabels(ui) > 0, true)
+    Fake.uninstall()
+end)
+
+test("typing in the title bar filters, Enter picks into the workspace's group and clears the box", function()
+    local S = setup()
+    S.Workspace.Show()
+    local search = titleSearch()
+    Fake.fire(search, "OnEditFocusGained")
+    search:SetText("wool"); Fake.fire(search, "OnTextChanged", true)
+    local ui = S.ItemPicker._debug()
+    eq(#shownLabels(ui), 2)
+    Fake.fire(search, "OnEnterPressed")
+    eq(S.Link.Get("A"), 10, "Wool Cloth is selected for the group, so the chart follows")
+    eq(S.ItemPicker.IsShown(), false)
+    eq(search.text, "", "the box is empty again")
+    Fake.uninstall()
+end)
+
+test("Escape in the title-bar box closes the results and empties it", function()
+    local S = setup()
+    S.Workspace.Show()
+    local search = titleSearch()
+    Fake.fire(search, "OnEditFocusGained")
+    search:SetText("lin"); Fake.fire(search, "OnTextChanged", true)
+    Fake.fire(search, "OnEscapePressed")
+    eq(S.ItemPicker.IsShown(), false)
+    eq(search.text, "")
+    Fake.uninstall()
+end)
+
+test("only one picker is open at a time, whichever way it was opened", function()
+    local S = setup()
+    S.Workspace.Show()
+    local search = titleSearch()
+    local panel = S.ChartPanel.Create(UIParent, { link = "A" })
+
+    Fake.fire(search, "OnEditFocusGained")
+    search:SetText("lin"); Fake.fire(search, "OnTextChanged", true)
+    Fake.fire(panel.nameHit, "OnMouseUp") -- the item name opens its own picker
+    local ui, state = S.ItemPicker._debug()
+    eq(S.ItemPicker.IsShown(), true)
+    eq(state.edit, ui.edit, "now serving the name's picker")
+    eq(search.text, "", "the title-bar box was closed and cleared")
+    eq(ui.edit.shown, true)
+
+    Fake.fire(search, "OnEditFocusGained") -- and the other way round
+    eq(state.edit, search)
+    eq(ui.edit.shown, false)
+    eq(S.ItemPicker.IsShown(), true)
     Fake.uninstall()
 end)

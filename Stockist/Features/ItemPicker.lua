@@ -100,18 +100,75 @@ function Picker.Search(source, text)
 end
 
 ---------------------------------------------------------------------------------------------------
+-- Scroll bar maths (pure)
+---------------------------------------------------------------------------------------------------
+
+local MIN_THUMB = 16
+
+local function thumbHeight(total, visible, track)
+    return math.max(MIN_THUMB, math.floor(track * visible / total + 0.5))
+end
+
+--- The thumb of a scroll bar: its distance from the top of the track and its height, in pixels. Nil when
+--- everything fits and no bar is needed.
+function Picker.Thumb(total, visible, offset, track)
+    if total <= visible then return nil end
+    local height = thumbHeight(total, visible, track)
+    local range = track - height
+    local top = math.floor(range * offset / (total - visible) + 0.5)
+    return math.max(0, math.min(range, top)), height
+end
+
+--- The list offset after the thumb is dragged `dy` pixels down from where it was grabbed (`startOffset`).
+function Picker.OffsetForDrag(total, visible, track, startOffset, dy)
+    if total <= visible then return 0 end
+    local range = track - thumbHeight(total, visible, track)
+    if range <= 0 then return 0 end
+    local offset = startOffset + dy / range * (total - visible)
+    return math.max(0, math.min(total - visible, math.floor(offset + 0.5)))
+end
+
+---------------------------------------------------------------------------------------------------
 -- Popup (game side)
 ---------------------------------------------------------------------------------------------------
 
-local ui -- built on first use: { catcher, popup, edit, rows = {...}, ... }
-local state = { rows = {}, selectable = {}, cursor = 1, offset = 0, onPick = nil }
+-- One popup serves two entry points, and only one is open at a time:
+--   * the item name in a chart header: the popup has its own search box;
+--   * a search box that lives elsewhere (the workspace title bar, see Picker.Attach): the popup shows only
+--     the results, under that box.
+local ui -- built on first use
+local state = { rows = {}, selectable = {}, cursor = 1, offset = 0, onPick = nil, edit = nil, external = false }
+
+local GAP = 4        -- space between the item name and the popup
+local SCROLL_W = 6
+local TRACK_H = ROWS * ROW_HEIGHT
+
+local function listTop() return state.external and 8 or 50 end
+
+--- Place the result list (and the scroll bar track beside it) for the current mode.
+local function layout()
+    local top = listTop()
+    ui.popup:SetHeight(top + TRACK_H + 8)
+    ui.list:ClearAllPoints()
+    ui.list:SetPoint("TOPLEFT", ui.popup, "TOPLEFT", 4, -top)
+    ui.list:SetPoint("TOPRIGHT", ui.popup, "TOPRIGHT", ui.scrollVisible and -(SCROLL_W + 10) or -4, -top)
+    ui.list:SetHeight(TRACK_H)
+    ui.track:ClearAllPoints()
+    ui.track:SetPoint("TOPRIGHT", ui.popup, "TOPRIGHT", -5, -top)
+    ui.track:SetSize(SCROLL_W, TRACK_H)
+end
 
 local function close()
-    if not ui then return end
+    if not (ui and ui.popup:IsShown()) then return end
+    local edit, external = state.edit, state.external
     ui.popup:Hide()
     ui.catcher:Hide()
-    ui.edit:ClearFocus()
     state.onPick = nil
+    state.edit = nil
+    if edit then
+        edit:ClearFocus()
+        if external then edit:SetText("") end
+    end
 end
 
 local function pick(id)
@@ -129,7 +186,7 @@ local function ensureVisible()
     if pos > state.offset + ROWS then state.offset = pos - ROWS end
 end
 
---- Draw the visible slice of rows. The mouse wheel scrolls without moving the highlight.
+--- Draw the visible slice of rows and the scroll bar. The mouse wheel scrolls without moving the highlight.
 local function redraw()
     local pos = state.selectable[state.cursor]
     state.offset = math.max(0, math.min(state.offset, math.max(0, #state.rows - ROWS)))
@@ -156,10 +213,25 @@ local function redraw()
         end
     end
     ui.empty:SetShown(#state.rows == 0)
+
+    -- A scroll bar shows only when there is more than fits: it is the hint that the list scrolls.
+    local top, height = Picker.Thumb(#state.rows, ROWS, state.offset, TRACK_H)
+    local needed = top ~= nil
+    if needed ~= ui.scrollVisible then
+        ui.scrollVisible = needed
+        layout()
+    end
+    ui.track:SetShown(needed)
+    ui.thumb:SetShown(needed)
+    if needed then
+        ui.thumb:ClearAllPoints()
+        ui.thumb:SetPoint("TOPRIGHT", ui.track, "TOPRIGHT", 0, -top)
+        ui.thumb:SetSize(SCROLL_W, height)
+    end
 end
 
 local function refresh()
-    state.rows = Picker.Entries(Picker.Source(), ui.edit:GetText())
+    state.rows = Picker.Entries(Picker.Source(), state.edit:GetText())
     state.selectable = {}
     for i, row in ipairs(state.rows) do
         if row.kind ~= "header" then state.selectable[#state.selectable + 1] = i end
@@ -176,8 +248,37 @@ local function move(delta)
     redraw()
 end
 
+--- Keyboard handling shared by the popup's own search box and one attached from outside. Each box only
+--- acts while it is the one the popup is serving.
+local function bindEdit(edit)
+    edit:SetScript("OnTextChanged", function(self)
+        if not (ui and ui.popup:IsShown() and state.edit == self) then return end
+        state.cursor, state.offset = 1, 0
+        refresh()
+    end)
+    edit:SetScript("OnEnterPressed", function(self)
+        if state.edit ~= self then return end
+        local pos = state.selectable[state.cursor]
+        local row = pos and state.rows[pos]
+        if row then pick(row.id) end
+    end)
+    edit:SetScript("OnEscapePressed", function(self)
+        if state.edit == self then close() else self:ClearFocus() end
+    end)
+    if edit.SetAltArrowKeyMode then edit:SetAltArrowKeyMode(false) end
+    edit:SetScript("OnArrowPressed", function(self, key)
+        if state.edit ~= self then return end
+        if key == "UP" then move(-1) elseif key == "DOWN" then move(1) end
+    end)
+end
+
+local function cursorY()
+    local _, y = GetCursorPosition()
+    return y / ui.popup:GetEffectiveScale()
+end
+
 local function build()
-    ui = {}
+    ui = { scrollVisible = false }
     -- A transparent layer over the whole screen: a click anywhere outside the popup closes it.
     ui.catcher = CreateFrame("Button", nil, UIParent)
     ui.catcher:SetAllPoints(UIParent)
@@ -187,7 +288,7 @@ local function build()
 
     local popup = CreateFrame("Frame", nil, UIParent, "BackdropTemplate")
     ui.popup = popup
-    popup:SetSize(WIDTH, 34 + ROWS * ROW_HEIGHT + 8)
+    popup:SetWidth(WIDTH)
     popup:SetFrameStrata("FULLSCREEN_DIALOG")
     popup:SetFrameLevel(ui.catcher:GetFrameLevel() + 5)
     popup:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8x8", edgeFile = "Interface\\Buttons\\WHITE8x8", edgeSize = 1 })
@@ -200,30 +301,23 @@ local function build()
         redraw()
     end)
 
+    -- The popup's own search box, used when it was opened from an item name.
     local edit = CreateFrame("EditBox", nil, popup, "InputBoxTemplate")
     ui.edit = edit
     edit:SetAutoFocus(false)
     edit:SetSize(WIDTH - 24, 20)
     edit:SetPoint("TOPLEFT", 14, -8)
-    edit:SetScript("OnTextChanged", function() state.cursor, state.offset = 1, 0; refresh() end)
-    edit:SetScript("OnEnterPressed", function()
-        local pos = state.selectable[state.cursor]
-        local row = pos and state.rows[pos]
-        if row then pick(row.id) end
-    end)
-    edit:SetScript("OnEscapePressed", close)
-    if edit.SetAltArrowKeyMode then edit:SetAltArrowKeyMode(false) end
-    edit:SetScript("OnArrowPressed", function(_, key)
-        if key == "UP" then move(-1) elseif key == "DOWN" then move(1) end
-    end)
+    bindEdit(edit)
 
     ui.hint = popup:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
     ui.hint:SetPoint("TOPLEFT", edit, "BOTTOMLEFT", -2, -2)
     ui.hint:SetText("Type a name, or paste an item link")
 
+    ui.list = CreateFrame("Frame", nil, popup)
+
     ui.empty = popup:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    ui.empty:SetPoint("TOPLEFT", 12, -64)
-    ui.empty:SetPoint("TOPRIGHT", -12, -64)
+    ui.empty:SetPoint("TOPLEFT", ui.list, "TOPLEFT", 8, -8)
+    ui.empty:SetPoint("TOPRIGHT", ui.list, "TOPRIGHT", -8, -8)
     ui.empty:SetJustifyH("LEFT")
     ui.empty:SetWordWrap(true)
     ui.empty:SetTextColor(0.7, 0.72, 0.78)
@@ -231,10 +325,10 @@ local function build()
 
     ui.rows = {}
     for slot = 1, ROWS do
-        local row = CreateFrame("Button", nil, popup)
+        local row = CreateFrame("Button", nil, ui.list)
         row:SetHeight(ROW_HEIGHT)
-        row:SetPoint("TOPLEFT", 4, -34 - (slot - 1) * ROW_HEIGHT)
-        row:SetPoint("TOPRIGHT", -4, -34 - (slot - 1) * ROW_HEIGHT)
+        row:SetPoint("TOPLEFT", ui.list, "TOPLEFT", 0, -(slot - 1) * ROW_HEIGHT)
+        row:SetPoint("TOPRIGHT", ui.list, "TOPRIGHT", 0, -(slot - 1) * ROW_HEIGHT)
         row:RegisterForClicks("LeftButtonUp")
         row.highlight = row:CreateTexture(nil, "BACKGROUND")
         row.highlight:SetAllPoints()
@@ -255,6 +349,29 @@ local function build()
         ui.rows[slot] = row
     end
 
+    -- The scroll bar: a thin track with a thumb that can be dragged. It only appears when the list is longer
+    -- than the window, which is also the hint that it scrolls.
+    ui.track = CreateFrame("Frame", nil, popup)
+    local trackBg = ui.track:CreateTexture(nil, "BACKGROUND")
+    trackBg:SetAllPoints()
+    trackBg:SetColorTexture(1, 1, 1, 0.07)
+    ui.thumb = CreateFrame("Button", nil, popup)
+    ui.thumb:SetFrameLevel(ui.track:GetFrameLevel() + 2)
+    local thumbBg = ui.thumb:CreateTexture(nil, "ARTWORK")
+    thumbBg:SetAllPoints()
+    thumbBg:SetColorTexture(0.55, 0.65, 0.85, 0.65)
+    local drag
+    ui.thumb:SetScript("OnMouseDown", function() drag = { y = cursorY(), offset = state.offset } end)
+    ui.thumb:SetScript("OnMouseUp", function() drag = nil end)
+    ui.thumb:SetScript("OnUpdate", function()
+        if not drag then return end
+        if IsMouseButtonDown and not IsMouseButtonDown("LeftButton") then drag = nil return end
+        state.offset = Picker.OffsetForDrag(#state.rows, ROWS, TRACK_H, drag.offset, drag.y - cursorY())
+        redraw()
+    end)
+    ui.track:Hide()
+    ui.thumb:Hide()
+
     -- Item names arrive from the server a moment after they are first asked for.
     local loader = CreateFrame("Frame")
     loader:RegisterEvent("GET_ITEM_INFO_RECEIVED")
@@ -264,19 +381,37 @@ local function build()
     ui.catcher:Hide()
 end
 
---- Open the picker under `anchor`. `onPick(itemID)` runs when an item is chosen. Opening it again
---- replaces the first use.
-function Picker.Show(anchor, onPick)
+--- Open the picker under `anchor`. `onPick(itemID)` runs when an item is chosen. `opts.edit` is a search
+--- box that already exists elsewhere: the popup then shows only the results, under it. Anything already
+--- open (from the other entry point too) is closed first, so there is only ever one.
+function Picker.Show(anchor, onPick, opts)
     if not ui then build() end
+    close()
+    opts = opts or {}
     state.onPick = onPick
+    state.external = opts.edit ~= nil
+    state.edit = opts.edit or ui.edit
     state.cursor, state.offset = 1, 0
+    ui.edit:SetShown(not state.external)
+    ui.hint:SetShown(not state.external)
     ui.popup:ClearAllPoints()
-    ui.popup:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", 0, -2)
-    ui.edit:SetText("")
+    ui.popup:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", 0, state.external and -2 or -GAP)
     ui.catcher:Show()
     ui.popup:Show()
+    state.edit:SetText("")
+    layout()
     refresh()
-    ui.edit:SetFocus()
+    state.edit:SetFocus()
+end
+
+--- Let a search box that lives elsewhere (a window's title bar, say) drive the picker: focusing it opens the
+--- results under it, typing filters them, and choosing an item calls `onPick(itemID)`.
+function Picker.Attach(edit, onPick)
+    bindEdit(edit)
+    edit:SetScript("OnEditFocusGained", function(self)
+        if state.edit == self and Picker.IsShown() then return end
+        Picker.Show(self, onPick, { edit = self })
+    end)
 end
 
 function Picker.Hide() close() end
