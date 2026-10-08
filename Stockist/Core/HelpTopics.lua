@@ -27,7 +27,7 @@ R("popout", "Pop out", "Opens this chart in its own window.",
     "The chart stays here too. A popped-out window is handy when you want to keep one item in view while "
     .. "you look at something else.")
 
-R("watchlist-row", "Tracked item", "Click to show this item in the chart. Right-click to stop tracking it.",
+R("watchlist-row", "Tracked item", "Click to show this item in the chart. To stop tracking it, select it and use the button below the list.",
     "Each row shows the cheapest price now, how far it has moved in the last 24 hours (green is up, red is down) "
     .. "and a small line of the last 7 days. The line is green if the price ended higher than it started.")
 

@@ -2,8 +2,8 @@ local ADDON_NAME, Stockist = ...
 
 -- The watchlist panel: every tracked item with its latest price, 24h change and a small price line.
 -- Clicking a row selects the item in the panel's link group, so a chart in the same group follows.
--- Right-click a row to stop tracking it. A button under the list tracks (or untracks) the item that is
--- selected in the group. Rows are built by the pure Watchlist.Rows; the panel only draws them.
+-- Only a left click does anything: a stray right click must never remove a tracked item. A button under
+-- the list tracks (or stops tracking) the item that is selected in the group. Rows are built by the pure Watchlist.Rows; the panel only draws them.
 local Format = Stockist.Format
 
 local Watchlist = {}
@@ -90,7 +90,7 @@ end
 local function buildRow(self, parent)
     local row = CreateFrame("Button", nil, parent)
     row:SetHeight(ROW_HEIGHT)
-    row:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+    row:RegisterForClicks("LeftButtonUp")
 
     row.selectedBg = row:CreateTexture(nil, "BACKGROUND")
     row.selectedBg:SetAllPoints()
@@ -131,13 +131,8 @@ local function buildRow(self, parent)
         r.hoverBg:Hide()
         GameTooltip:Hide()
     end)
-    row:SetScript("OnClick", function(r, mouse)
-        if not r.itemID then return end
-        if mouse == "RightButton" then
-            self:Untrack(r.itemID)
-        else
-            self:Select(r.itemID)
-        end
+    row:SetScript("OnClick", function(r)
+        if r.itemID then self:Select(r.itemID) end
     end)
     return row
 end
