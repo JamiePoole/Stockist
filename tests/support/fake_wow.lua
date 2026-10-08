@@ -26,6 +26,9 @@ local function trackedMethods()
         SetTextColor = function(self, r, g, b, a) self.textColor = { r, g, b, a } end,
         SetDesaturated = function(self, v) self.desaturated = v and true or false end,
         SetBlendMode = function(self, mode) self.blendMode = mode end,
+        SetGradient = function(self, orientation, from, to) self.gradient = { orientation, from, to } end,
+        SetWidth = function(self, w) self.size = { w, self.size and self.size[2] } end,
+        SetHeight = function(self, h) self.size = { self.size and self.size[1], h } end,
         SetVertexColor = function(self, r, g, b, a) self.vertexColor = { r, g, b, a } end,
         GetObjectType = function(self) return self.kind end,
         RegisterForClicks = function(self, ...) self.clickButtons = { ... } end,
@@ -139,6 +142,7 @@ end
 function Fake.install()
     timers = {}
     Fake.objects = {}
+    CreateColor = function(r, g, b, a) return { r = r, g = g, b = b, a = a } end
     UIParent = Fake.new("Frame")
     GameTooltip = Fake.new("Frame")
     UISpecialFrames = {}
@@ -168,7 +172,7 @@ end
 
 --- Remove the globals again, so other specs see a plain Lua environment.
 function Fake.uninstall()
-    for _, name in ipairs({ "UIParent", "GameTooltip", "UISpecialFrames", "tinsert", "GetCursorPosition",
+    for _, name in ipairs({ "CreateColor", "UIParent", "GameTooltip", "UISpecialFrames", "tinsert", "GetCursorPosition",
         "CreateFrame", "C_Timer", "StockistChartWindow" }) do
         _G[name] = nil
     end

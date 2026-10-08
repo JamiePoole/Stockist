@@ -119,6 +119,74 @@ test("the active scope keeps the button art but recoloured blue, with white text
     Fake.uninstall()
 end)
 
+test("the selected button has a gentle blue layer and a vignette that darkens the edges", function()
+    local S = setup()
+    local panel = S.ChartPanel.Create(UIParent)
+    panel:SetItem(7)
+    local btn = panel.tfButtons["1D"]
+    local glow = btn.selectedGlow
+
+    eq(glow.blendMode, "ADD")
+    eq(glow.color[4] <= 0.6, true, "gentle: the art's own shading shows through (not 90% flat)")
+    eq(#btn.selectedLayers, 5, "the blue layer and four vignette fades")
+
+    local horizontal, vertical = 0, 0
+    for i = 2, 5 do
+        local strip = btn.selectedLayers[i]
+        eq(strip.blendMode, "BLEND", "fades use normal blending")
+        eq(strip.shown, true)
+        local orientation, from, to = strip.gradient[1], strip.gradient[2], strip.gradient[3]
+        if orientation == "HORIZONTAL" then horizontal = horizontal + 1 else vertical = vertical + 1 end
+        eq(from.r == 0 and from.g == 0 and from.b == 0 and to.r == 0 and to.g == 0 and to.b == 0, true, "black fades")
+        local darker, clearer = math.max(from.a, to.a), math.min(from.a, to.a)
+        eq(clearer, 0, "one end is fully transparent")
+        eq(darker > 0 and darker < 1, true, "the other end is a soft dark")
+    end
+    eq(horizontal, 2); eq(vertical, 2, "left and right, top and bottom")
+
+    -- the dark end is at the outer edge, the clear end towards the centre
+    local left, right, top, bottom = btn.selectedLayers[2], btn.selectedLayers[3], btn.selectedLayers[4], btn.selectedLayers[5]
+    eq(left.gradient[2].a > 0 and left.gradient[3].a == 0, true, "left: dark at the left edge")
+    eq(right.gradient[2].a == 0 and right.gradient[3].a > 0, true, "right: dark at the right edge")
+    eq(top.gradient[2].a == 0 and top.gradient[3].a > 0, true, "top: dark at the top (vertical gradients run bottom to top)")
+    eq(bottom.gradient[2].a > 0 and bottom.gradient[3].a == 0, true, "bottom: dark at the bottom")
+
+    -- an inactive button shows none of it
+    for _, layer in ipairs(panel.tfButtons["1W"].selectedLayers) do eq(layer.shown, false) end
+    Fake.uninstall()
+end)
+
+test("the vignette falls back to the older gradient call, and is dropped if neither works", function()
+    local S = setup()
+    local function buttonWith(gradientCall)
+        local btn = CreateFrame("Button", nil, UIParent, "UIPanelButtonTemplate")
+        local make = btn.CreateTexture
+        btn.CreateTexture = function(self, ...)
+            local tex = make(self, ...)
+            gradientCall(tex)
+            return tex
+        end
+        S.UI.Button.SetSelected(btn, true)
+        return btn
+    end
+
+    local old = buttonWith(function(tex)
+        tex.SetGradient = function() error("not in this client") end
+        tex.SetGradientAlpha = function(t, orientation, ...) t.legacyGradient = { orientation, ... } end
+    end)
+    eq(#old.selectedLayers, 5, "all four fades are kept via SetGradientAlpha")
+    eq(old.selectedLayers[2].legacyGradient[1], "HORIZONTAL")
+    eq(#old.selectedLayers[2].legacyGradient, 9, "orientation + two RGBA colours")
+
+    local none = buttonWith(function(tex)
+        tex.SetGradient = function() error("no") end
+        tex.SetGradientAlpha = function() error("no") end
+    end)
+    eq(#none.selectedLayers, 1, "only the blue layer: no solid white blocks")
+    eq(none.selectedGlow.shown, true)
+    Fake.uninstall()
+end)
+
 test("clicking the active scope does nothing, and the blue moves when the scope changes", function()
     local S = setup()
     local panel = S.ChartPanel.Create(UIParent)
