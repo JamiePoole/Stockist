@@ -38,12 +38,15 @@ local function showItemTooltip(owner, itemID)
 end
 
 --- Create a chart panel filling `parent`. `opts` (optional): itemID, timeframe ("1D"/"1W"/"1M"),
---- indicators ({ sma = bool, bollinger = bool }).
+--- indicators ({ sma = bool, bollinger = bool }), link (a link group name: the panel then follows
+--- that group's selected item, see Core/Link.lua), popOut (add a pop-out icon button, rightmost in the
+--- header, that opens the item in its own window).
 function ChartPanel.Create(parent, opts)
     opts = opts or {}
     local self = setmetatable({
+        link = opts.link,
         state = {
-            itemID = opts.itemID,
+            itemID = opts.itemID or Stockist.Link.Get(opts.link),
             timeframe = opts.timeframe or "1D",
             indicators = opts.indicators or { sma = true, bollinger = false },
         },
@@ -72,12 +75,22 @@ function ChartPanel.Create(parent, opts)
     self.metaText = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     self.metaText:SetPoint("LEFT", self.priceText, "RIGHT", 12, 0)
 
-    -- Controls, right to left: time scope buttons | divider | chart overlays.
+    -- Controls, right to left: pop out | time scope buttons | divider | chart overlays.
     local prev
+    local gap = -2
+    if opts.popOut then
+        local pop = Stockist.UI.IconButton.Create(frame, { icon = "popout", width = 24, height = 20 })
+        pop:SetPoint("TOPRIGHT", 0, 0)
+        pop:SetScript("OnClick", function() self:PopOut() end)
+        Stockist.UI.Tooltip.Attach(pop, "popout")
+        self.popOutButton = pop
+        prev, gap = pop, -8
+    end
     for i = #PriceChart.TIMEFRAMES, 1, -1 do
         local tf = PriceChart.TIMEFRAMES[i]
         local b = button(frame, tf.key, 40, "timeframe-" .. tf.key)
-        if prev then b:SetPoint("RIGHT", prev, "LEFT", -2, 0) else b:SetPoint("TOPRIGHT", 0, 0) end
+        if prev then b:SetPoint("RIGHT", prev, "LEFT", gap, 0) else b:SetPoint("TOPRIGHT", 0, 0) end
+        gap = -2
         b:SetScript("OnClick", function() self.state.timeframe = tf.key; self:Refresh() end)
         self.tfButtons[tf.key] = b
         prev = b
@@ -153,8 +166,17 @@ function ChartPanel.Create(parent, opts)
         if frame:IsVisible() then self:Refresh() end
     end, self)
 
-    if self.state.itemID then self:Refresh() end
+    Stockist.Events:On("LINK_SELECTED", function(group, itemID)
+        if self.link and group == self.link and itemID ~= self.state.itemID then self:SetItem(itemID) end
+    end, self)
+
+    self:Refresh()
     return self
+end
+
+--- Open this panel's item in its own window (the panel stays where it is).
+function ChartPanel:PopOut()
+    if self.state.itemID then Stockist.PriceChart.Show(self.state.itemID) end
 end
 
 function ChartPanel:SetItem(itemID)
@@ -191,6 +213,9 @@ function ChartPanel:ShowStatus(status)
     if status.kind == "notfound" then
         self.nameText:SetText(Format.Colored("Item not found", 0.92, 0.3, 0.3))
         self.metaText:SetText("")
+    elseif status.kind == "noitem" then
+        self.nameText:SetText("")
+        self.metaText:SetText("")
     else
         self.nameText:SetText(Stockist.ItemInfo.ColoredName(state.itemID))
         self.metaText:SetText("no data yet")
@@ -224,7 +249,13 @@ end
 --- Redraw everything from the current item, scope and indicators.
 function ChartPanel:Refresh()
     local state = self.state
-    if not (state.itemID and Stockist.store) then return end
+    if not Stockist.store then return end
+    if not state.itemID then
+        return self:ShowStatus({
+            kind = "noitem",
+            text = "No item selected. Pick one from the watchlist, or open one with /stockist workspace <item>.",
+        })
+    end
     local now = Stockist.Clock.now()
     local lastScan = Stockist.db and Stockist.db.scan and Stockist.db.scan.last
     local status = PriceChart.Status(Stockist.store, state.itemID, Stockist.ItemInfo.Exists(state.itemID), lastScan, now)

@@ -22,6 +22,9 @@ local function trackedMethods()
         Disable = function(self) self.enabled = false end,
         IsEnabled = function(self) return self.enabled end,
         SetAlpha = function(self, a) self.alpha = a end,
+        SetColorTexture = function(self, r, g, b, a) self.color = { r, g, b, a } end,
+        SetStartPoint = function(self, ...) self.startPoint = { ... } end,
+        SetEndPoint = function(self, ...) self.endPoint = { ... } end,
         SetScript = function(self, name, fn) self.scripts[name] = fn end,
         GetScript = function(self, name) return self.scripts[name] end,
         HookScript = function(self, name, fn)
@@ -32,9 +35,18 @@ local function trackedMethods()
         UnregisterEvent = function(self, e) self.events[e] = nil end,
         SetFrameLevel = function(self, n) self.level = n end,
         GetFrameLevel = function(self) return self.level or 5 end,
-        GetWidth = function() return 640 end,
-        GetHeight = function() return 360 end,
-        GetSize = function() return 640, 360 end,
+        SetSize = function(self, w, h) self.size = { w, h } end,
+        GetWidth = function(self) return self.size and self.size[1] or 640 end,
+        GetHeight = function(self) return self.size and self.size[2] or 360 end,
+        GetSize = function(self)
+            if self.size then return self.size[1], self.size[2] end
+            return 640, 360
+        end,
+        SetPoint = function(self, ...)
+            self.points = self.points or {}
+            self.points[#self.points + 1] = { ... }
+        end,
+        ClearAllPoints = function(self) self.points = {} end,
         GetStringWidth = function(self) return 6 * #(self.text or "") end,
         GetStringHeight = function(self)
             local _, lines = (self.text or ""):gsub("\n", "")
@@ -57,11 +69,14 @@ end
 
 local METHODS = trackedMethods()
 
+Fake.objects = {} -- every object created (frames, font strings, textures), in order; reset by install
+
 function Fake.new(kind, parent)
     local o = {
         kind = kind, parent = parent, shown = true, enabled = true,
         scripts = {}, hooks = {}, events = {}, calls = {},
     }
+    Fake.objects[#Fake.objects + 1] = o
     return setmetatable(o, {
         __index = function(_, key)
             local m = METHODS[key]
@@ -102,6 +117,7 @@ end
 --- Install the globals the addon's UI code expects. Call before loading the addon files.
 function Fake.install()
     timers = {}
+    Fake.objects = {}
     UIParent = Fake.new("Frame")
     GameTooltip = Fake.new("Frame")
     UISpecialFrames = {}

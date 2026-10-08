@@ -33,6 +33,8 @@ local function richestItem()
     return best
 end
 
+Stockist.RichestItem = richestItem
+
 local function chart(arg)
     local id
     if arg ~= "" then
