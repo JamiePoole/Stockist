@@ -37,6 +37,16 @@ function Format.MoneyShort(copper)
     return sign .. Format.Number(c) .. "c"
 end
 
+--- "|cffRRGGBB" colour escape for 0-1 components.
+function Format.ColorCode(r, g, b)
+    return ("|cff%02x%02x%02x"):format(
+        math.floor(r * 255 + 0.5), math.floor(g * 255 + 0.5), math.floor(b * 255 + 0.5))
+end
+
+function Format.Colored(text, r, g, b)
+    return Format.ColorCode(r, g, b) .. text .. "|r"
+end
+
 --- Seconds ago -> "just now", "12m ago", "3h ago", "2d ago".
 function Format.Age(seconds)
     if seconds < 60 then return "just now" end

@@ -236,6 +236,24 @@ test("axis labels are drawn for non-minimal charts", function()
     eq(right[1].str:match("g$") ~= nil, true, "money format")
 end)
 
+test("a pane title is drawn in its corner so stacked axes are not confused", function()
+    local C = ns().Charts
+    local model = C.Build({
+        panes = {
+            { id = "p", title = "Price", axis = { format = "money" },
+              series = { { type = "line", points = linePoints(5, function(i) return i * 100 end) } } },
+            { id = "v", title = "Listed", axis = { format = "int" },
+              series = { { type = "bar", points = linePoints(5, function(i) return i end) } } },
+        },
+    }, 400, 300)
+    local canvas = new_recording_canvas()
+    C.Draw(model, canvas)
+    local titles = canvas:find("text", function(o) return o.anchor == "TOPLEFT" end)
+    eq(#titles, 2)
+    eq(titles[1].str, "Price"); eq(titles[2].str, "Listed")
+    eq(titles[1].y > titles[2].y, true, "top pane's title is higher")
+end)
+
 test("a line wider than the x window is clipped, not drawn off the plot", function()
     local C = ns().Charts
     local model = C.Build({

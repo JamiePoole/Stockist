@@ -13,6 +13,9 @@ Core\Clock.lua
 Core\EventBus.lua
 Core\Registry.lua
 Core\Format.lua
+Core\ItemInfo.lua
+Core\Help.lua
+Core\HelpTopics.lua
 Data\Rollup.lua
 Data\Indicators.lua
 Data\ReadingStore.lua
@@ -31,6 +34,7 @@ UI\Charts\Core.lua
 UI\Charts\FrameCanvas.lua
 UI\Charts\ChartFrame.lua
 UI\Kit\Window.lua
+UI\Kit\Tooltip.lua
 Features\PriceChart.lua
 Features\Slash.lua
 Core\Bootstrap.lua

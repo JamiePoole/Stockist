@@ -46,6 +46,7 @@ function Window.Create(opts)
     frame:SetBackdropBorderColor(1, 1, 1, 0.15)
     frame:SetFrameStrata("HIGH")
     frame:SetClampedToScreen(true)
+    frame:EnableMouse(true) -- the whole window is solid: clicks on empty areas must not reach the world behind
     frame:SetMovable(true)
     frame:SetResizable(true)
     if frame.SetResizeBounds then

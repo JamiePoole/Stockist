@@ -9,7 +9,8 @@ local Util = Charts.Util
 --     theme = "dark", minimal = false (no axes or padding: sparklines), padding = {left,right,top,bottom},
 --     x = { format = "time", range = {min, max}?, tzOffset = seconds? },
 --     panes = {
---       { id = "price", weight = 3, axis = { format = "money" }, y = { range = {min, max}? },
+--       { id = "price", weight = 3, title = "Price" (shown in the corner), axis = { format = "money" },
+--         y = { range = {min, max}? },
 --         series   = { { type = "candle", id = "price", points = ... } },
 --         overlays = { { type = "sma", of = "price", period = 20 } } },
 --       { id = "supply", weight = 1, axis = { format = "int" }, series = { { type = "bar", points = ... } } },
@@ -177,6 +178,9 @@ local function drawAxes(model, canvas)
     for _, pane in ipairs(model.panes) do
         local r = pane.rect
         canvas:line(r.x, r.y, r.x, r.y + r.h, t.axis, 1)
+        if pane.def.title then
+            canvas:text(r.x + 6, r.y + r.h - 4, pane.def.title, { t.text[1], t.text[2], t.text[3], 0.6 }, "TOPLEFT")
+        end
         for _, v in ipairs(Scale.Ticks(pane.ys.d0, pane.ys.d1, math.max(2, math.floor(r.h / 40)))) do
             local y = pane.ys:Map(v)
             canvas:line(r.x, y, r.x + r.w, y, t.grid, 1)
