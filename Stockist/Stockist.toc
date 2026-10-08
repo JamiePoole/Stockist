@@ -45,6 +45,7 @@ UI\Kit\IconButton.lua
 UI\Kit\Window.lua
 Features\PriceChart.lua
 Features\ChartPanel.lua
+Features\Watchlist.lua
 Features\Workspace.lua
 Features\StatusCommands.lua
 Features\DataCleanup.lua
