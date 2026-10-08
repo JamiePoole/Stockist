@@ -20,6 +20,7 @@ local TIMEFRAMES = {
 }
 -- The "recent" move beside the price compares the latest scan with the average of the scans in this window.
 local RECENT_WINDOW = 2 * 3600
+PriceChart.RECENT_WINDOW = RECENT_WINDOW
 -- Indicator settings. A moving average needs `period` points before its first value, so a line needs
 -- period + 1. The periods are modest because Auction House history is sparse (the textbook Bollinger
 -- period of 20 would rarely be available).
@@ -38,7 +39,7 @@ PriceChart.TIMEFRAMES = TIMEFRAMES
 
 --- Help topics the window attaches to its widgets (checked by tests against Core/HelpTopics.lua).
 PriceChart.HELP_KEYS = {
-    "timeframe-1D", "timeframe-1W", "timeframe-1M", "sma", "bollinger", "tutorial", "change-recent",
+    "timeframe-1D", "timeframe-1W", "timeframe-1M", "sma", "bollinger", "tutorial", "change-recent", "change-scope",
 }
 
 local function timeframe(key)
@@ -210,21 +211,28 @@ function PriceChart.Header(store, itemID, now, name, key)
     return line .. "  updated " .. Format.Age(p.age)
 end
 
---- The text after the price: "+3.10% 24h  updated 12m ago", the change coloured green or red.
-function PriceChart.MetaText(parts)
-    local pieces = {}
-    if parts.change then pieces[#pieces + 1] = Format.Change(parts.change) .. " " .. (parts.changeLabel or "24h") end
-    pieces[#pieces + 1] = "updated " .. Format.Age(parts.age)
-    return table.concat(pieces, "   ")
+--- The main move in the header, over the chart's scope: "+3.10% 7d", the figure coloured green or red and
+--- the span in grey. Empty when there is no move to show.
+function PriceChart.ChangeText(parts)
+    if not parts.change then return "" end
+    return Format.Change(parts.change) .. " " .. Format.Colored(parts.changeLabel or "24h", 0.6, 0.63, 0.68)
 end
 
---- The header text after the price, fullest first, for a panel to pick from by the room it has:
---- "+3.10% 7d   updated 12m ago", then just "+3.10% 7d" (when there is a move over the scope), then nothing.
+--- The smaller move next to it: "recent +0.80%" (the latest scan against the average of the last couple of
+--- hours). Empty until there are enough scans.
+function PriceChart.RecentText(parts)
+    if not parts.recent then return "" end
+    return Format.Colored("recent", 0.6, 0.63, 0.68) .. " " .. Format.Change(parts.recent)
+end
+
+--- The text after the moves: "updated 12m ago".
+function PriceChart.MetaText(parts)
+    return "updated " .. Format.Age(parts.age)
+end
+
+--- The text after the moves, fullest first, for a panel to pick from by the room it has.
 function PriceChart.MetaChoices(parts)
-    local choices = { PriceChart.MetaText(parts) }
-    if parts.change then choices[#choices + 1] = Format.Change(parts.change) .. " " .. (parts.changeLabel or "24h") end
-    choices[#choices + 1] = ""
-    return choices
+    return { PriceChart.MetaText(parts), "" }
 end
 
 ---------------------------------------------------------------------------------------------------

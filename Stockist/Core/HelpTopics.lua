@@ -35,10 +35,14 @@ R("watchlist-track", "Track this item", "Adds the item shown in the chart to you
     "Tracked items are kept in this list and their price history is stored for longer, so you can see "
     .. "slow trends. Items you do not track are cleaned up after a while.")
 
+R("change-scope", "Change over this time range", "How much the price has moved over the range you picked: 24 hours, 7 days or 30 days.",
+    "Green is up, red is down. It changes with the 1D / 1W / 1M buttons, so it always describes the chart "
+    .. "you are looking at. With less history than the range it says how long it really covers.")
+
 R("change-recent", "Recent change", "How far the latest price is from its average over the last couple of hours.",
     "Green is up, red is down. Comparing with an average, not just the previous scan, stops one odd "
     .. "listing from making the number jump around. It appears once there are a few scans to average. "
-    .. "The figure beside it covers the time range you picked: 24 hours, 7 days or 30 days.")
+    .. "Handy for an item you are not watching: it shows whether it is moving right now.")
 
 R("tutorial", "Tutorial tips", "Turns the longer explanations on or off.",
     "When on, buttons and the chart show plain-language descriptions of what each thing means. "

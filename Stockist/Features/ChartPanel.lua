@@ -91,9 +91,16 @@ function ChartPanel.Create(parent, opts)
 
     self.priceText = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     self.priceText:SetPoint("LEFT", self.nameText, "RIGHT", 12, 0)
-    -- The recent move sits right beside the price; hover it for what it means.
-    self.recentText = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    self.recentText:SetPoint("LEFT", self.priceText, "RIGHT", 8, 0)
+    -- The main move, over the chart's scope, sits right beside the price; the smaller "recent" move follows it.
+    -- Hover either for what it means.
+    self.changeText = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    self.changeText:SetPoint("LEFT", self.priceText, "RIGHT", 8, 0)
+    self.changeHit = CreateFrame("Frame", nil, frame)
+    self.changeHit:SetAllPoints(self.changeText)
+    self.changeHit:EnableMouse(true)
+    Stockist.UI.Tooltip.Attach(self.changeHit, "change-scope")
+    self.recentText = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    self.recentText:SetPoint("LEFT", self.changeText, "RIGHT", 8, 0)
     self.recentHit = CreateFrame("Frame", nil, frame)
     self.recentHit:SetAllPoints(self.recentText)
     self.recentHit:EnableMouse(true)
@@ -155,6 +162,7 @@ function ChartPanel.Create(parent, opts)
 
     self.controlsWidth = used
     self.metaChoices = { "" }
+    self.recentFull = ""
     self.chart = Stockist.Charts.Create(frame, { series = {} })
 
     -- Drop an item on the panel (or the chart itself) to chart it.
@@ -317,49 +325,60 @@ function ChartPanel:ShadeDots(alpha)
     for _, dot in ipairs(self.dots) do dot:SetColorTexture(0.6, 0.8, 1, alpha) end
 end
 
---- Fit the header (name, price, recent move, and the "scope change / updated" text) into the room left
---- of the buttons. What gives way first: the "updated ..." text, then the scope change, then the item name,
---- which is cut off with "..." (hover it for the full name). The price and the scan move are never cut.
---- A message such as "no data yet" outranks the name. Runs again whenever the text or the size changes.
+--- Fit the header into the room left of the buttons. Left to right: item name, price, the move over the
+--- chart's scope, the smaller recent move, and the "updated ..." text. What gives way first: the "updated"
+--- text, then the recent move, then the item name, which is cut off with "..." (hover it for the full
+--- name). The price and the scope move are never cut. A message such as "no data yet" outranks the name.
+--- Runs again whenever the text or the size changes.
 function ChartPanel:LayoutHeader()
     local width = self.frame:GetWidth()
     local natural = self.nameText:GetStringWidth()
-    local price, scan = self.priceText:GetStringWidth(), self.recentText:GetStringWidth()
-    local fixed = (price > 0 and (12 + price) or 0) + (scan > 0 and ((price > 0 and 8 or 12) + scan) or 0) -- with their gaps
     local room = width - self.controlsWidth - HEADER_MARGIN
-    local choices = self.metaChoices
 
     -- Empty pieces take no room: each piece hangs from the last one that has text, so the gaps between the
-    -- pieces that are shown are exactly the ones counted below.
-    self.priceText:ClearAllPoints()
-    self.priceText:SetPoint("LEFT", self.nameText, "RIGHT", 12, 0)
-    self.recentText:ClearAllPoints()
-    self.recentText:SetPoint("LEFT", price > 0 and self.priceText or self.nameText, "RIGHT", price > 0 and 8 or 12, 0)
-    self.metaText:ClearAllPoints()
-    self.metaText:SetPoint("LEFT", scan > 0 and self.recentText or (price > 0 and self.priceText or self.nameText),
-        "RIGHT", 12, 0)
-
-    local chosen, meta = choices[1], 0
-    if width > 1 then
-        chosen = nil
-        for _, text in ipairs(choices) do
-            self.metaText:SetText(text)
-            local w = text ~= "" and (12 + self.metaText:GetStringWidth()) or 0
-            if natural + fixed + w <= room then chosen, meta = text, w break end
+    -- pieces that are shown are exactly the ones counted.
+    local function place(recent, meta)
+        self.recentText:SetText(recent)
+        self.metaText:SetText(meta)
+        local prev, total = self.nameText, 0
+        for _, piece in ipairs({
+            { self.priceText, 12 }, { self.changeText, 8 }, { self.recentText, 8 }, { self.metaText, 12 },
+        }) do
+            local fs, gap = piece[1], piece[2]
+            local w = fs:GetStringWidth()
+            fs:ClearAllPoints()
+            fs:SetPoint("LEFT", prev, "RIGHT", prev == self.nameText and 12 or gap, 0)
+            if w > 0 then
+                total = total + (prev == self.nameText and 12 or gap) + w
+                prev = fs
+            end
         end
-        if not chosen then
-            -- Nothing fits next to the whole name: keep a message, drop the rest, and shorten the name.
-            chosen = self.metaKeep and choices[1] or ""
-            self.metaText:SetText(chosen)
-            meta = chosen ~= "" and (12 + self.metaText:GetStringWidth()) or 0
-        end
+        return total
     end
-    self.metaText:SetText(chosen)
+
+    -- Fullest first: everything, then without "updated", then without the recent move too.
+    local levels = {}
+    for _, meta in ipairs(self.metaChoices) do levels[#levels + 1] = { self.recentFull, meta } end
+    if self.recentFull ~= "" then levels[#levels + 1] = { self.recentFull, "" } end
+    levels[#levels + 1] = { "", "" }
+
+    local used
+    if width > 1 then
+        for _, level in ipairs(levels) do
+            used = place(level[1], level[2])
+            if natural + used <= room then break end
+            used = nil
+        end
+        if not used then
+            -- Nothing fits next to the whole name: keep a message, drop the rest, and shorten the name.
+            used = place("", self.metaKeep and self.metaChoices[1] or "")
+        end
+    else
+        used = place(self.recentFull, self.metaChoices[1])
+    end
 
     local nameWidth = natural + 1
-    if width > 1 and natural + fixed + meta > room then
-        nameWidth = room - fixed - meta
-    end
+    if width > 1 and natural + used > room then nameWidth = room - used end
     self.nameText:SetWidth(math.max(1, nameWidth))
     local hitWidth = math.max(1, math.min(natural, nameWidth))
     self.nameHit:SetSize(hitWidth, math.max(1, self.nameText:GetStringHeight()))
@@ -383,7 +402,8 @@ function ChartPanel:ShowStatus(status)
         self.metaKeep = true -- the reason there is no chart: the name gives way before this does
     end
     self.priceText:SetText("")
-    self.recentText:SetText("")
+    self.changeText:SetText("")
+    self.recentFull = ""
     self:LayoutHeader()
     self:UpdateTitle()
 
@@ -436,7 +456,8 @@ function ChartPanel:Refresh()
     self.nameText:SetText(Stockist.ItemInfo.ColoredName(state.itemID))
     local parts = PriceChart.HeaderParts(Stockist.store, state.itemID, now, state.timeframe)
     self.priceText:SetText(parts and Format.MoneyDisplay(parts.price) or "")
-    self.recentText:SetText(parts and Format.Change(parts.recent) or "")
+    self.changeText:SetText(parts and PriceChart.ChangeText(parts) or "")
+    self.recentFull = parts and PriceChart.RecentText(parts) or ""
     self.metaChoices = parts and PriceChart.MetaChoices(parts) or { "no data yet" }
     self.metaKeep = parts == nil
     self:LayoutHeader()

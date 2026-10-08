@@ -320,15 +320,17 @@ test("Format.Change is coloured by direction and empty for nothing", function()
     Fake.uninstall()
 end)
 
-test("each watchlist row shows the 24h move beside the price", function()
+test("each watchlist row shows the recent move beside the price and the 24h move after it", function()
     local S = setup()
     local panel = panelFor(S)
     local row = shownRows(panel)[1] -- item 7
+    eq(row.recent.text:find("+0.76%", 1, true) ~= nil, true, row.recent.text)
     eq(row.change.text:find("24h", 1, true) ~= nil, true, row.change.text)
     eq(row.change.text:find("+", 1, true) ~= nil, true, "item 7 rose")
-    eq(row.change.points[#row.change.points][2], row.price, "right after the price")
-    eq(shownRows(panel)[3].change.text, "", "no data: no move shown")
-    eq(row.scan, nil, "no separate scan figure any more")
+    eq(row.recent.points[#row.recent.points][2], row.price, "the recent move right after the price")
+    eq(row.change.points[#row.change.points][2], row.recent, "and the 24h move after that")
+    local empty = shownRows(panel)[3]
+    eq(empty.recent.text, ""); eq(empty.change.text, "", "no data: no moves shown")
     Fake.uninstall()
 end)
 
