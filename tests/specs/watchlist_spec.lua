@@ -151,12 +151,24 @@ test("clicking a row selects the item in the link group and highlights it", func
     Fake.uninstall()
 end)
 
-test("right-clicking a row stops tracking that item", function()
+test("a row only reacts to the left button, so a stray right click cannot untrack anything", function()
+    local S = setup()
+    local panel = panelFor(S)
+    local row = shownRows(panel)[1]
+    eq(#row.clickButtons, 1); eq(row.clickButtons[1], "LeftButtonUp")
+    Fake.fire(row, "OnClick", "RightButton") -- even if the client delivered one
+    eq(S.tracked:Has(7), true, "still tracked")
+    eq(#shownRows(panel), 3)
+    Fake.uninstall()
+end)
+
+test("untracking is a deliberate two-step: select the row, press the button", function()
     local S = setup()
     local panel = panelFor(S)
     local events = {}
     S.Events:On("TRACKED_CHANGED", function(id, on) events[#events + 1] = { id, on } end)
-    Fake.fire(shownRows(panel)[1], "OnClick", "RightButton")
+    Fake.fire(shownRows(panel)[1], "OnClick", "LeftButton")
+    Fake.fire(panel.trackButton, "OnClick")
     eq(S.tracked:Has(7), false)
     eq(events[1][1], 7); eq(events[1][2], false)
     eq(#shownRows(panel), 2, "the list redraws without it")
