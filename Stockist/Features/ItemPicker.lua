@@ -168,6 +168,11 @@ local function layout()
     ui.track:SetSize(SCROLL_W, TRACK_H)
 end
 
+--- A search box from outside may carry a placeholder (see UI/Kit/Window.lua); keep it in step with the text.
+local function repaint(edit)
+    if edit and edit.paintPlaceholder then edit.paintPlaceholder() end
+end
+
 local function close()
     if not (ui and ui.popup:IsShown()) then return end
     local edit, external = state.edit, state.external
@@ -179,6 +184,7 @@ local function close()
     if edit then
         edit:ClearFocus()
         if external then edit:SetText("") end
+        repaint(edit) -- empty and unfocused again: the placeholder comes back
     end
 end
 
@@ -263,6 +269,7 @@ end
 --- acts while it is the one the popup is serving.
 local function bindEdit(edit)
     edit:SetScript("OnTextChanged", function(self)
+        repaint(self)
         if not (ui and ui.popup:IsShown() and state.edit == self) then return end
         state.cursor, state.offset = 1, 0
         refresh()
@@ -455,8 +462,10 @@ end
 function Picker.Attach(edit, onPick)
     bindEdit(edit)
     edit:SetScript("OnEditFocusGained", function(self)
+        repaint(self) -- typing is about to start: the placeholder goes
         if state.edit == self and Picker.IsShown() then return end
         Picker.Show(self, onPick, { edit = self })
+        repaint(self)
     end)
 end
 

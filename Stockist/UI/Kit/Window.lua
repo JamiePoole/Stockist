@@ -129,9 +129,11 @@ function Window.Create(opts)
         local placeholder = search:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
         placeholder:SetPoint("LEFT", 2, 0)
         placeholder:SetText("Search items")
-        local function paint() placeholder:SetShown(search:GetText() == "" and not search:HasFocus()) end
-        search:HookScript("OnTextChanged", paint)
-        search:HookScript("OnEditFocusGained", paint)
+        -- The placeholder shows while the box is empty and not being typed in. Whoever sets the box's own
+        -- scripts (the item picker does) must call search.paintPlaceholder after changing its text or focus:
+        -- SetScript replaces the hooks we could add here.
+        local function paint() placeholder:SetShown((search:GetText() or "") == "" and not search:HasFocus()) end
+        search.placeholder, search.paintPlaceholder = placeholder, paint
         search:HookScript("OnEditFocusLost", paint)
         paint()
     end

@@ -552,3 +552,66 @@ test("without GLOBAL_MOUSE_DOWN the old click-catching layer is used instead", f
     eq(S.ItemPicker.IsShown(), false)
     Fake.uninstall()
 end)
+
+-- The placeholder in the title-bar box ------------------------------------------------------------------
+
+--- A title-bar box whose focus the test controls. Hooks are cleared, as the real client does when the item
+--- picker replaces the box's scripts, so only what the picker itself does can keep the placeholder right.
+local function focusableSearch(S)
+    S.Workspace.Show()
+    local search = titleSearch()
+    local focused = false
+    search.HasFocus = function() return focused end
+    search.SetFocus = function() focused = true end
+    search.ClearFocus = function() focused = false end
+    search.hooks = {}
+    local function click() focused = true; Fake.fire(search, "OnEditFocusGained") end
+    local function type_(text) search:SetText(text); Fake.fire(search, "OnTextChanged", true) end
+    return search, click, type_
+end
+
+test("title-bar placeholder: shown when empty, gone while typing, back after Enter or picking", function()
+    local S = setup()
+    local search, click, type_ = focusableSearch(S)
+    search.paintPlaceholder()
+    eq(search.placeholder.shown, true, "'Search items' at rest")
+
+    click()
+    eq(search.placeholder.shown, false, "gone once the box is in use")
+    type_("wo")
+    eq(search.placeholder.shown, false, "and not showing behind what is typed")
+
+    Fake.fire(search, "OnEnterPressed") -- picks Wool Cloth
+    eq(search.text, "")
+    eq(search.placeholder.shown, true, "back, never a blank box, after choosing")
+
+    click(); type_("lin")
+    local ui = S.ItemPicker._debug()
+    Fake.fire(ui.rows[2], "OnClick") -- click a result instead of Enter
+    eq(search.placeholder.shown, true, "also after clicking a result")
+    Fake.uninstall()
+end)
+
+test("title-bar placeholder returns after Escape, and after clicking away", function()
+    local S = setup()
+    local search, click, type_ = focusableSearch(S)
+    click(); type_("lin")
+    Fake.fire(search, "OnEscapePressed")
+    eq(search.placeholder.shown, true)
+
+    click(); type_("lin")
+    Fake.fire(S.ItemPicker._debug().events, "OnEvent", "GLOBAL_MOUSE_DOWN", "LeftButton")
+    eq(S.ItemPicker.IsShown(), false)
+    eq(search.placeholder.shown, true, "clicking away empties the box and shows it again")
+    Fake.uninstall()
+end)
+
+test("backspacing the title-bar text to nothing leaves it empty while still in use, then clears on leaving", function()
+    local S = setup()
+    local search, click, type_ = focusableSearch(S)
+    click(); type_("lin"); type_("")
+    eq(search.placeholder.shown, false, "still focused: the caret is there, no placeholder under it")
+    Fake.fire(S.ItemPicker._debug().events, "OnEvent", "GLOBAL_MOUSE_DOWN", "LeftButton")
+    eq(search.placeholder.shown, true)
+    Fake.uninstall()
+end)
