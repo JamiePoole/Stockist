@@ -84,7 +84,9 @@ function ChartPanel.Create(parent, opts)
     -- Clicking the name opens the item picker under it.
     self.nameHit:SetScript("OnMouseUp", function(hit)
         GameTooltip:Hide()
-        Stockist.ItemPicker.Show(hit, function(itemID) self:Pick(itemID) end)
+        local picker = Stockist.ItemPicker
+        if picker.IsShown() and picker.Anchor() == hit then return picker.Hide() end -- a second click closes it
+        picker.Show(hit, function(itemID) self:Pick(itemID) end)
     end)
 
     self.priceText = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")

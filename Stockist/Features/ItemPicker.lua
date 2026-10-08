@@ -5,6 +5,9 @@ local ADDON_NAME, Stockist = ...
 -- The list has the watchlist (tracked items) first, a separator, then every other item we hold prices for.
 -- Type to filter by name; paste an item link or type an item ID to open an item we have no data for yet.
 -- Enter picks the highlighted row (the first one), Up/Down move it, Esc or a click outside closes.
+-- The popup never blocks the rest of the screen: while the search box has the keyboard you can still
+-- shift-click an item in your bags (or anywhere an item link is offered) to put it in the box, and a
+-- click with Shift, Ctrl or Alt held does not count as "clicking away".
 -- Entries and Search are pure; the popup below them is the game side.
 local Picker = {}
 Stockist.ItemPicker = Picker
@@ -69,7 +72,14 @@ function Picker.Entries(source, query)
     local watch = matching(source.tracked, source.nameOf, query)
     local rest = matching(others, source.nameOf, query)
 
+    -- Pasting or shift-clicking an item link means "this item": search for its ID, not the link text.
     local typed = Stockist.ParseItemID and Stockist.ParseItemID(query)
+    local isLink = query:find("item:", 1, true) ~= nil
+    if typed and isLink then
+        query = tostring(typed)
+        watch = matching(source.tracked, source.nameOf, query)
+        rest = matching(others, source.nameOf, query)
+    end
     if typed then
         local listed = false
         for _, e in ipairs(watch) do if e.id == typed then listed = true end end
@@ -137,7 +147,7 @@ end
 --   * a search box that lives elsewhere (the workspace title bar, see Picker.Attach): the popup shows only
 --     the results, under that box.
 local ui -- built on first use
-local state = { rows = {}, selectable = {}, cursor = 1, offset = 0, onPick = nil, edit = nil, external = false }
+local state = { rows = {}, selectable = {}, cursor = 1, offset = 0, onPick = nil, edit = nil, external = false, anchor = nil }
 
 local GAP = 4        -- space between the item name and the popup
 local SCROLL_W = 6
@@ -165,6 +175,7 @@ local function close()
     ui.catcher:Hide()
     state.onPick = nil
     state.edit = nil
+    state.anchor = nil
     if edit then
         edit:ClearFocus()
         if external then edit:SetText("") end
@@ -279,7 +290,41 @@ end
 
 local function build()
     ui = { scrollVisible = false }
-    -- A transparent layer over the whole screen: a click anywhere outside the popup closes it.
+
+    -- Clicking away closes the popup. We listen for every mouse press instead of covering the screen with
+    -- a click-catching layer, so bags, the Auction House and the rest of the UI keep working (shift-clicking
+    -- an item to put its link in the search box needs that). A press with Shift, Ctrl or Alt held, or on the
+    -- popup, its search box or what opened it, is not "clicking away".
+    ui.events = CreateFrame("Frame")
+    ui.globalClicks = pcall(ui.events.RegisterEvent, ui.events, "GLOBAL_MOUSE_DOWN")
+    ui.events:SetScript("OnEvent", function(_, event)
+        if event ~= "GLOBAL_MOUSE_DOWN" or not ui.popup:IsShown() then return end
+        if (IsShiftKeyDown and IsShiftKeyDown()) or (IsControlKeyDown and IsControlKeyDown())
+            or (IsAltKeyDown and IsAltKeyDown()) then return end
+        for _, frame in ipairs({ ui.popup, state.edit, state.anchor }) do
+            if frame and frame:IsMouseOver() then return end
+        end
+        close()
+    end)
+
+    -- Item links offered while the search box has the keyboard (shift-click in bags and so on) go into it.
+    -- The game may route one click through both names below; the same link in the same instant is one insert.
+    local lastLink, lastTime
+    local function insertLink(link)
+        local edit = state.edit
+        if type(link) == "string" and link:find("|Hitem:", 1, true) and edit and edit:HasFocus() then
+            local now = GetTime and GetTime() or 0
+            if link == lastLink and now == lastTime then return end
+            lastLink, lastTime = link, now
+            edit:Insert(link)
+        end
+    end
+    if hooksecurefunc then
+        if _G.ChatEdit_InsertLink then hooksecurefunc("ChatEdit_InsertLink", insertLink) end
+        if _G.ChatFrameUtil and _G.ChatFrameUtil.InsertLink then hooksecurefunc(_G.ChatFrameUtil, "InsertLink", insertLink) end
+    end
+
+    -- Older clients without GLOBAL_MOUSE_DOWN fall back to a transparent layer that catches the click.
     ui.catcher = CreateFrame("Button", nil, UIParent)
     ui.catcher:SetAllPoints(UIParent)
     ui.catcher:SetFrameStrata("FULLSCREEN_DIALOG")
@@ -389,6 +434,7 @@ function Picker.Show(anchor, onPick, opts)
     close()
     opts = opts or {}
     state.onPick = onPick
+    state.anchor = anchor
     state.external = opts.edit ~= nil
     state.edit = opts.edit or ui.edit
     state.cursor, state.offset = 1, 0
@@ -396,7 +442,7 @@ function Picker.Show(anchor, onPick, opts)
     ui.hint:SetShown(not state.external)
     ui.popup:ClearAllPoints()
     ui.popup:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", 0, state.external and -2 or -GAP)
-    ui.catcher:Show()
+    ui.catcher:SetShown(not ui.globalClicks)
     ui.popup:Show()
     state.edit:SetText("")
     layout()
@@ -415,6 +461,9 @@ function Picker.Attach(edit, onPick)
 end
 
 function Picker.Hide() close() end
+
+--- The frame the open popup hangs from (nil when closed): lets a button toggle its own picker.
+function Picker.Anchor() return state.anchor end
 
 function Picker.IsShown() return ui ~= nil and ui.popup:IsShown() end
 

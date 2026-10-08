@@ -116,7 +116,7 @@ test("opening the picker shows the list and focuses the search box", function()
     S.ItemPicker.Show(anchor(), function(id) picked = id end)
     local ui = S.ItemPicker._debug()
     eq(S.ItemPicker.IsShown(), true)
-    eq(ui.catcher.shown, true, "a click-outside layer is up")
+    eq(ui.catcher.shown, false, "no screen-covering layer: the rest of the UI stays usable")
     eq(Fake.called(ui.edit, "SetFocus"), true)
     local labels = shownLabels(ui)
     eq(labels[1], "Watchlist"); eq(#labels, 7)
@@ -186,9 +186,6 @@ test("Enter on an empty result does nothing, and Escape or a click outside close
     Fake.fire(ui.edit, "OnEnterPressed")
     eq(picked, false); eq(S.ItemPicker.IsShown(), true, "still open")
     Fake.fire(ui.edit, "OnEscapePressed")
-    eq(picked, false); eq(S.ItemPicker.IsShown(), false)
-    S.ItemPicker.Show(anchor(), function() picked = true end)
-    Fake.fire(ui.catcher, "OnClick")
     eq(picked, false); eq(S.ItemPicker.IsShown(), false)
     Fake.uninstall()
 end)
@@ -431,5 +428,127 @@ test("only one picker is open at a time, whichever way it was opened", function(
     eq(state.edit, search)
     eq(ui.edit.shown, false)
     eq(S.ItemPicker.IsShown(), true)
+    Fake.uninstall()
+end)
+
+-- Clicking away, and shift-clicking items into the box ---------------------------------------------------
+
+local function press(ui) Fake.fire(ui.events, "OnEvent", "GLOBAL_MOUSE_DOWN", "LeftButton") end
+
+test("a plain click elsewhere closes the picker; a click on it, its box or what opened it does not", function()
+    local S = setup()
+    local name = anchor()
+    S.ItemPicker.Show(name, function() end)
+    local ui = S.ItemPicker._debug()
+    eq(ui.globalClicks, true)
+    ui.popup.IsMouseOver = function() return true end
+    press(ui)
+    eq(S.ItemPicker.IsShown(), true, "a click inside the popup")
+    ui.popup.IsMouseOver = function() return false end
+    name.IsMouseOver = function() return true end
+    press(ui)
+    eq(S.ItemPicker.IsShown(), true, "a click on the item name that opened it")
+    name.IsMouseOver = function() return false end
+    ui.edit.IsMouseOver = function() return true end
+    press(ui)
+    eq(S.ItemPicker.IsShown(), true, "a click in the search box")
+    ui.edit.IsMouseOver = function() return false end
+    press(ui)
+    eq(S.ItemPicker.IsShown(), false, "a click anywhere else")
+    Fake.uninstall()
+end)
+
+test("a click with Shift, Ctrl or Alt held does not close it, so items can be shift-clicked into the box", function()
+    local S = setup()
+    S.ItemPicker.Show(anchor(), function() end)
+    local ui = S.ItemPicker._debug()
+    for _, key in ipairs({ "IsShiftKeyDown", "IsControlKeyDown", "IsAltKeyDown" }) do
+        _G[key] = function() return true end
+        press(ui)
+        eq(S.ItemPicker.IsShown(), true, key)
+        _G[key] = nil
+    end
+    press(ui)
+    eq(S.ItemPicker.IsShown(), false, "plain click still closes")
+    Fake.uninstall()
+end)
+
+test("an item link offered while the search box has the keyboard goes into the box and finds that item", function()
+    local hooks = {}
+    hooksecurefunc = function(name, fn) hooks[name] = fn end
+    ChatEdit_InsertLink = function() return false end
+    local S = setup()
+    S.ParseItemID = S.ParseItemID or function(t) return tonumber(t:match("^%s*(%d+)%s*$") or t:match("item:(%d+)")) end
+    S.ItemPicker.Show(anchor(), function() end)
+    local ui = S.ItemPicker._debug()
+    eq(type(hooks.ChatEdit_InsertLink), "function", "hooked, without replacing the game's function")
+    ui.edit.HasFocus = function() return true end
+    ui.edit.Insert = function(self, text) self.text = (self.text or "") .. text end
+    hooks.ChatEdit_InsertLink("|cff1eff00|Hitem:7::::|h[Linen Cloth]|h|r")
+    eq(ui.edit.text:find("Hitem:7", 1, true) ~= nil, true, "the link is in the box")
+    Fake.fire(ui.edit, "OnTextChanged", true)
+    eq(shownLabels(ui)[1], "Watchlist")
+    eq(#shownLabels(ui), 2, "just that item, found by its ID")
+
+    -- the same click reported twice (the game has two names for the function) inserts once
+    ui.edit.text = ""
+    GetTime = function() return 5 end
+    local link = "|cff1eff00|Hitem:7::::|h[Linen Cloth]|h|r"
+    hooks.ChatEdit_InsertLink(link); hooks.ChatEdit_InsertLink(link)
+    eq(ui.edit.text, link, "once, not twice")
+    GetTime = nil
+
+    ui.edit.text = ""
+    hooks.ChatEdit_InsertLink("not a link")
+    hooks.ChatEdit_InsertLink("|cffa335ee|Hspell:133|h[Fireball]|h|r")
+    eq(ui.edit.text, "", "only item links are taken")
+    ui.edit.HasFocus = function() return false end
+    hooks.ChatEdit_InsertLink("|cff1eff00|Hitem:7::::|h[Linen Cloth]|h|r")
+    eq(ui.edit.text, "", "and only while the box has the keyboard")
+    hooksecurefunc, ChatEdit_InsertLink = nil, nil
+    Fake.uninstall()
+end)
+
+test("an item link in the box for an item we have no data on offers to open it", function()
+    local S = setup()
+    S.ParseItemID = S.ParseItemID or function(t) return tonumber(t:match("^%s*(%d+)%s*$") or t:match("item:(%d+)")) end
+    local rows = S.ItemPicker.Entries(S.ItemPicker.Source(), "|cff1eff00|Hitem:2589::::|h[Linen Cloth]|h|r")
+    eq(describe(rows), "open 2589")
+    rows = S.ItemPicker.Entries(S.ItemPicker.Source(), "|cff1eff00|Hitem:8::::|h[Mageweave Cloth]|h|r")
+    eq(describe(rows), "# Items with prices | Mageweave Cloth", "a known item is simply listed")
+    Fake.uninstall()
+end)
+
+test("clicking the item name again closes its picker", function()
+    local S = setup()
+    local panel = S.ChartPanel.Create(UIParent, { link = "A" })
+    Fake.fire(panel.nameHit, "OnMouseUp")
+    eq(S.ItemPicker.IsShown(), true)
+    Fake.fire(panel.nameHit, "OnMouseUp")
+    eq(S.ItemPicker.IsShown(), false)
+    Fake.fire(panel.nameHit, "OnMouseUp")
+    eq(S.ItemPicker.IsShown(), true, "and a third opens it again")
+    Fake.uninstall()
+end)
+
+test("without GLOBAL_MOUSE_DOWN the old click-catching layer is used instead", function()
+    local S = setup()
+    local real = CreateFrame
+    CreateFrame = function(...)
+        local f = real(...)
+        local reg = f.RegisterEvent
+        f.RegisterEvent = function(self, e, ...)
+            if e == "GLOBAL_MOUSE_DOWN" then error("unknown event") end
+            return reg(self, e, ...)
+        end
+        return f
+    end
+    S.ItemPicker.Show(anchor(), function() end)
+    CreateFrame = real
+    local ui = S.ItemPicker._debug()
+    eq(ui.globalClicks, false)
+    eq(ui.catcher.shown, true)
+    Fake.fire(ui.catcher, "OnClick")
+    eq(S.ItemPicker.IsShown(), false)
     Fake.uninstall()
 end)
