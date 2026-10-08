@@ -95,12 +95,9 @@ function Window.Create(opts)
     close:SetFrameLevel(bar:GetFrameLevel() + 10)
     help:RegisterForClicks("LeftButtonUp")
     local function paintHelp()
-        local fs = help:GetFontString()
-        if Stockist.Help.TutorialEnabled() then
-            fs:SetTextColor(0.3, 1, 0.5)
-        else
-            fs:SetTextColor(0.7, 0.7, 0.7)
-        end
+        local on = Stockist.Help.TutorialEnabled()
+        UI.Button.SetActive(help, on)
+        if not on then help:GetFontString():SetTextColor(0.7, 0.7, 0.7) end -- off: a dim grey "?"
     end
     help:SetScript("OnClick", function()
         Stockist.Help.SetTutorial(not Stockist.Help.TutorialEnabled())
@@ -108,6 +105,7 @@ function Window.Create(opts)
     end)
     UI.Tooltip.Attach(help, "tutorial")
     Stockist.Events:On("TUTORIAL_CHANGED", paintHelp)
+    Stockist.Events:On("TOGGLE_STYLE_CHANGED", paintHelp)
     paintHelp()
 
     local content = CreateFrame("Frame", nil, frame)
@@ -129,5 +127,5 @@ function Window.Create(opts)
     if opts.name then tinsert(UISpecialFrames, opts.name) end -- Esc closes it
     frame:Hide()
 
-    return { frame = frame, content = content, title = title }
+    return { frame = frame, content = content, title = title, helpButton = help }
 end

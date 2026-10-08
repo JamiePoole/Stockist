@@ -1,6 +1,6 @@
 local function setup()
     local S = load_addon("Core/EventBus.lua", "Core/Registry.lua", "Core/Format.lua", "Core/Commands.lua",
-        "Core/Help.lua", "Core/HelpTopics.lua", "Features/StatusCommands.lua")
+        "Core/Help.lua", "Core/HelpTopics.lua", "UI/Kit/Button.lua", "Features/StatusCommands.lua")
     local out = {}
     S.Print = function(msg) out[#out + 1] = msg end
     S.settings = {}
@@ -32,6 +32,18 @@ test("/stockist tutorial rejects anything else", function()
     S.Commands:Dispatch("tutorial maybe")
     eq(out[#out], "usage: /stockist tutorial [on|off]")
     eq(S.Help.TutorialEnabled(), true, "unchanged")
+end)
+
+test("/stockist togglestyle shows, sets and rejects the colour of the on/off buttons", function()
+    local S, out = setup()
+    S.Commands:Dispatch("togglestyle")
+    eq(out[#out]:find("toggle buttons are green", 1, true) ~= nil, true, out[#out])
+    S.Commands:Dispatch("togglestyle GOLD")
+    eq(S.settings.toggleStyle, "gold")
+    eq(out[#out], "toggle buttons are now gold.")
+    S.Commands:Dispatch("togglestyle pink")
+    eq(out[#out], "usage: /stockist togglestyle blue|green|gold")
+    eq(S.settings.toggleStyle, "gold", "unchanged")
 end)
 
 test("the help listing mentions the tutorial command", function()
