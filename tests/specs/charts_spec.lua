@@ -510,6 +510,31 @@ test("hover outside the plot clears the layer and returns nil", function()
     is_nil(C.Hover(model, canvas, nil, nil))
 end)
 
+test("hovering a candle shows how many scans it summarises", function()
+    local C = ns().Charts
+    local model = C.Build({
+        axis = { format = "money" }, x = { format = "number" },
+        series = { { type = "candle", points = {
+            { x = 100, o = 10000, h = 14000, l = 9000, c = 13000, n = 4 },
+            { x = 200, o = 13000, h = 13500, l = 8000, c = 9000, n = 1 },
+        } } },
+    }, 400, 300)
+    local canvas = new_recording_canvas()
+    local many = C.Hover(model, canvas, model.xs:Map(100), 150)
+    eq(many.rows[#many.rows].text, "4 scans")
+    local one = C.Hover(model, canvas, model.xs:Map(200), 150)
+    eq(one.rows[#one.rows].text, "1 scan", "singular")
+    eq(#one.rows, 6, "header + open/high/low/close + scans")
+end)
+
+test("a candle without a scan count shows no scans row", function()
+    local C = ns().Charts
+    local model = C.Build({ x = { format = "number" }, series = { { type = "candle", points = {
+        { x = 100, o = 10, h = 14, l = 9, c = 13 }, { x = 200, o = 13, h = 14, l = 9, c = 10 } } } } }, 300, 200)
+    local hit = C.Hover(model, new_recording_canvas(), model.xs:Map(100), 100)
+    eq(#hit.rows, 5)
+end)
+
 test("hover tooltip stays inside the chart", function()
     local C = ns().Charts
     local model = C.Build({
