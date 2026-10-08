@@ -134,6 +134,7 @@ local function buildRow(self, parent)
     row:SetScript("OnClick", function(r)
         if r.itemID then self:Select(r.itemID) end
     end)
+    Stockist.ItemPicker.AcceptDrops(row, function(itemID) self:Drop(itemID) end)
     return row
 end
 
@@ -155,6 +156,12 @@ function Watchlist.Create(parent, opts)
     self.list:SetPoint("BOTTOMRIGHT", 0, FOOTER_HEIGHT)
     self.list:EnableMouseWheel(true)
     self.list:SetScript("OnMouseWheel", function(_, delta) self:Scroll(-delta) end)
+    -- Drop an item anywhere on the panel to start tracking it (and show it in the chart).
+    frame:EnableMouse(true)
+    self.list:EnableMouse(true) -- both must take the mouse to be dropped on
+    Stockist.ItemPicker.AcceptDrops(self.list, function(itemID) self:Drop(itemID) end)
+    Stockist.ItemPicker.AcceptDrops(frame, function(itemID) self:Drop(itemID) end,
+        { hint = true, text = "Drop to track this item" })
 
     self.empty = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     self.empty:SetPoint("TOPLEFT", self.list, "TOPLEFT", 14, -16)
@@ -192,6 +199,14 @@ end
 --- Select an item in this panel's link group (so linked panels follow).
 function Watchlist:Select(itemID)
     if self.link then Stockist.Link.Select(self.link, itemID) end
+end
+
+--- An item was dropped on the panel: track it if it is not tracked yet, and select it for the group.
+--- An ID the game says does not exist is ignored.
+function Watchlist:Drop(itemID)
+    if Stockist.ItemInfo.Exists(itemID) == false then return end
+    if Stockist.tracked:Add(itemID) then Stockist.Events:Fire("TRACKED_CHANGED", itemID, true) end
+    self:Select(itemID)
 end
 
 function Watchlist:SetItem(itemID)

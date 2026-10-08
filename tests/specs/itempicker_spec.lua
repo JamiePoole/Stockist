@@ -636,3 +636,186 @@ test("shift-clicking a stack into the box does not leave the stack-split dialog 
     StackSplitFrame, hooksecurefunc, ChatEdit_InsertLink = nil, nil, nil
     Fake.uninstall()
 end)
+
+-- Dropping an item on a frame ---------------------------------------------------------------------------
+
+--- Pretend the cursor carries something: set `carrying` to { "item", 7 } (or nil for an empty cursor).
+local function cursor()
+    local c = { carrying = nil, cleared = 0 }
+    GetCursorInfo = function() if c.carrying then return unpack(c.carrying) end end
+    ClearCursor = function() c.cleared = c.cleared + 1; c.carrying = nil end
+    return c
+end
+
+local function endCursor() GetCursorInfo, ClearCursor, GetTime = nil, nil, nil end
+
+test("letting go of a carried item over a frame hands its ID over and puts the item back", function()
+    local S = setup()
+    local c = cursor()
+    local f = Fake.new("Frame")
+    local got = {}
+    S.ItemPicker.AcceptDrops(f, function(id) got[#got + 1] = id end)
+    c.carrying = { "item", 7, "|Hitem:7|h[Linen Cloth]|h" }
+    Fake.fire(f, "OnReceiveDrag")
+    eq(got[1], 7)
+    eq(c.cleared, 1, "the cursor is cleared: the item returns to its slot")
+    Fake.fire(f, "OnReceiveDrag")
+    eq(#got, 1, "an empty cursor does nothing")
+    endCursor()
+    Fake.uninstall()
+end)
+
+test("clicking a frame while carrying an item drops it too; an ordinary click does nothing", function()
+    local S = setup()
+    local c = cursor()
+    local f = Fake.new("Frame")
+    local got = {}
+    S.ItemPicker.AcceptDrops(f, function(id) got[#got + 1] = id end)
+    Fake.fire(f, "OnMouseUp", "LeftButton")
+    eq(#got, 0, "nothing on the cursor")
+    c.carrying = { "item", 8 }
+    Fake.fire(f, "OnMouseUp", "RightButton")
+    eq(#got, 0, "only the left button drops")
+    Fake.fire(f, "OnMouseUp", "LeftButton")
+    eq(got[1], 8)
+    endCursor()
+    Fake.uninstall()
+end)
+
+test("only items count: a spell, a gold amount or a macro on the cursor is ignored", function()
+    local S = setup()
+    local c = cursor()
+    local f = Fake.new("Frame")
+    local got = 0
+    S.ItemPicker.AcceptDrops(f, function() got = got + 1 end)
+    for _, thing in ipairs({ { "spell", 133 }, { "money", 5000 }, { "macro", 1 }, { "item" } }) do
+        c.carrying = thing
+        Fake.fire(f, "OnReceiveDrag")
+    end
+    eq(got, 0)
+    eq(c.cleared, 0, "and the cursor is left alone")
+    endCursor()
+    Fake.uninstall()
+end)
+
+test("one drop reported both as a drag-receive and a mouse-up is taken once", function()
+    local S = setup()
+    local c = cursor()
+    GetTime = function() return 12 end
+    local f = Fake.new("Frame")
+    local got = 0
+    S.ItemPicker.AcceptDrops(f, function() got = got + 1 end)
+    c.carrying = { "item", 7 }
+    Fake.fire(f, "OnReceiveDrag")
+    c.carrying = { "item", 7 } -- a client that has not updated the cursor yet
+    Fake.fire(f, "OnMouseUp", "LeftButton")
+    eq(got, 1)
+    endCursor()
+    Fake.uninstall()
+end)
+
+test("an existing drag handler on the frame is kept", function()
+    local S = setup()
+    local c = cursor()
+    local f = Fake.new("Frame")
+    local ran = 0
+    f:SetScript("OnReceiveDrag", function() ran = ran + 1 end)
+    S.ItemPicker.AcceptDrops(f, function() end)
+    c.carrying = { "item", 7 }
+    Fake.fire(f, "OnReceiveDrag")
+    eq(ran, 1)
+    endCursor()
+    Fake.uninstall()
+end)
+
+test("with a hint, the frame is shaded and says what to do only while an item is on the cursor", function()
+    local S = setup()
+    local c = cursor()
+    local f = Fake.new("Frame")
+    S.ItemPicker.AcceptDrops(f, function() end, { hint = true })
+    local watcher
+    for _, o in ipairs(Fake.objects) do if o.events and o.events["CURSOR_CHANGED"] then watcher = o end end
+    eq(watcher ~= nil, true, "listens for the cursor changing")
+    local overlay
+    for _, o in ipairs(Fake.objects) do if o.kind == "FontString" and o.text == "Drop to chart this item" then overlay = o.parent end end
+    eq(overlay.shown, false, "hidden at rest")
+    c.carrying = { "item", 7 }
+    Fake.fire(watcher, "OnEvent", "CURSOR_CHANGED")
+    eq(overlay.shown, true, "shown while carrying")
+    c.carrying = { "spell", 133 }
+    Fake.fire(watcher, "OnEvent", "CURSOR_CHANGED")
+    eq(overlay.shown, false, "not for a spell")
+    c.carrying = nil
+    Fake.fire(watcher, "OnEvent", "CURSOR_CHANGED")
+    eq(overlay.shown, false)
+    endCursor()
+    Fake.uninstall()
+end)
+
+test("dropping an item on a chart panel charts it for the whole link group", function()
+    local S = setup()
+    local c = cursor()
+    local a = S.ChartPanel.Create(UIParent, { link = "A" })
+    local b = S.ChartPanel.Create(UIParent, { link = "A" })
+    c.carrying = { "item", 8 }
+    Fake.fire(a.frame, "OnReceiveDrag")
+    eq(a:GetItem(), 8); eq(b:GetItem(), 8)
+    eq(S.Link.Get("A"), 8)
+    c.carrying = { "item", 9 }
+    Fake.fire(b.chart.frame, "OnMouseUp", "LeftButton") -- onto the chart itself, by click
+    eq(a:GetItem(), 9)
+    endCursor()
+    Fake.uninstall()
+end)
+
+test("dropping an item anywhere on the workspace charts it: the window, the title bar", function()
+    local S = setup()
+    local c = cursor()
+    S.Workspace.Show()
+    eq(S.Link.Get("A"), nil)
+    c.carrying = { "item", 7 }
+    Fake.fire(StockistWorkspace, "OnReceiveDrag")
+    eq(S.Link.Get("A"), 7)
+    c.carrying = { "item", 10 }
+    local bar
+    for _, o in ipairs(Fake.objects) do
+        if o.kind == "Frame" and o.parent == StockistWorkspace and o.scripts.OnDragStart then bar = o end
+    end
+    eq(bar ~= nil, true, "found the title bar")
+    Fake.fire(bar, "OnReceiveDrag")
+    eq(S.Link.Get("A"), 10)
+    endCursor()
+    Fake.uninstall()
+end)
+
+test("dropping an item on a pop-out changes only that chart, never the workspace's selection", function()
+    local S = setup()
+    local c = cursor()
+    local panels = {}
+    local chart = S.Panels:Get("chart")
+    local realCreate = chart.create
+    chart.create = function(...) local p = realCreate(...); panels[#panels + 1] = p; return p end
+    S.Workspace.Show(7)
+    local workspaceChart = panels[1]
+    S.PriceChart.Show(8) -- pop item 8 out
+    local pop = S.PriceChart.PopOutPanel()
+    eq(pop:GetItem(), 8); eq(workspaceChart:GetItem(), 7)
+
+    c.carrying = { "item", 10 }
+    Fake.fire(StockistChartWindow, "OnReceiveDrag") -- dropped on the pop-out window
+    eq(pop:GetItem(), 10, "the pop-out changed")
+    eq(workspaceChart:GetItem(), 7, "the workspace chart did not")
+    eq(S.Link.Get("A"), 7, "nor did the workspace's selection")
+
+    c.carrying = { "item", 9 }
+    Fake.fire(pop.frame, "OnReceiveDrag") -- onto the panel itself
+    eq(pop:GetItem(), 9); eq(S.Link.Get("A"), 7)
+
+    -- and the other way round: dropping on the workspace leaves the pop-out alone
+    c.carrying = { "item", 8 }
+    Fake.fire(StockistWorkspace, "OnReceiveDrag")
+    eq(S.Link.Get("A"), 8); eq(workspaceChart:GetItem(), 8)
+    eq(pop:GetItem(), 9, "the pop-out keeps its own item")
+    endCursor()
+    Fake.uninstall()
+end)

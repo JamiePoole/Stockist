@@ -480,6 +480,73 @@ function Picker.Attach(edit, onPick)
     end)
 end
 
+---------------------------------------------------------------------------------------------------
+-- Drop target: put an item on a frame to chart it
+---------------------------------------------------------------------------------------------------
+
+-- Pick an item up (from a bag, the Auction House list, anywhere the cursor can carry one), then either
+-- drag it onto a frame that accepts drops and let go, or click the frame. The frame's callback gets the item
+-- ID and the item goes straight back to where it came from: nothing is moved, sold or consumed.
+local drops = {}      -- frames with a drop hint: { frame, overlay }
+local dropWatcher
+
+local function itemOnCursor()
+    if not GetCursorInfo then return nil end
+    local kind, itemID = GetCursorInfo()
+    if kind == "item" and type(itemID) == "number" then return itemID end
+    return nil
+end
+
+local function updateHints()
+    local carrying = itemOnCursor() ~= nil
+    for _, d in ipairs(drops) do d.overlay:SetShown(carrying and d.frame:IsVisible()) end
+end
+
+--- Make `frame` take dropped items: `onPick(itemID)` runs for an item let go over it, or clicked onto it while
+--- the cursor carries one. `opts.hint = true` shades the frame and says "Drop to chart this item" (or
+--- `opts.text`) while an item is on the cursor. The frame must already take the mouse (EnableMouse); existing handlers are kept.
+function Picker.AcceptDrops(frame, onPick, opts)
+    local lastTime
+    local function receive()
+        local itemID = itemOnCursor()
+        if not itemID then return end
+        -- A click-drop can arrive as both a drag-receive and a mouse-up; take it once.
+        local now = GetTime and GetTime() or 0
+        if GetTime and lastTime == now then return end
+        lastTime = now
+        ClearCursor() -- the item goes back where it came from
+        onPick(itemID)
+    end
+    if frame.SetScript and frame:GetScript("OnReceiveDrag") then
+        frame:HookScript("OnReceiveDrag", receive)
+    else
+        frame:SetScript("OnReceiveDrag", receive)
+    end
+    frame:HookScript("OnMouseUp", function(_, button)
+        if button == nil or button == "LeftButton" then receive() end
+    end)
+
+    if opts and opts.hint then
+        local overlay = CreateFrame("Frame", nil, frame)
+        overlay:SetAllPoints(frame)
+        overlay:SetFrameLevel(frame:GetFrameLevel() + 20)
+        local shade = overlay:CreateTexture(nil, "OVERLAY")
+        shade:SetAllPoints()
+        shade:SetColorTexture(0.2, 0.45, 0.9, 0.18)
+        local text = overlay:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+        text:SetPoint("CENTER")
+        text:SetTextColor(0.75, 0.88, 1)
+        text:SetText(opts.text or "Drop to chart this item")
+        overlay:Hide()
+        drops[#drops + 1] = { frame = frame, overlay = overlay }
+        if not dropWatcher then
+            dropWatcher = CreateFrame("Frame")
+            dropWatcher:RegisterEvent("CURSOR_CHANGED")
+            dropWatcher:SetScript("OnEvent", updateHints)
+        end
+    end
+end
+
 function Picker.Hide() close() end
 
 --- The frame the open popup hangs from (nil when closed): lets a button toggle its own picker.

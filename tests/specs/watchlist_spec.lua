@@ -296,3 +296,59 @@ test("the price line in a row is static: no cursor, crosshair or tooltip", funct
     S.Charts.Hover = real
     Fake.uninstall()
 end)
+
+test("dropping an item on the watchlist tracks it and selects it for the group", function()
+    local S = setup()
+    local carrying = 99
+    GetCursorInfo = function() return "item", carrying end
+    ClearCursor = function() end
+    local panel = panelFor(S)
+    local events = {}
+    S.Events:On("TRACKED_CHANGED", function(id, on) events[#events + 1] = { id, on } end)
+    Fake.fire(panel.list, "OnReceiveDrag")
+    eq(S.tracked:Has(99), true, "now tracked")
+    eq(S.Link.Get("A"), 99, "and shown in the chart")
+    eq(events[1][1], 99); eq(events[1][2], true)
+    eq(#shownRows(panel), 4, "it appears in the list")
+
+    carrying = 8 -- an item that is already tracked: just selected, no second event
+    Fake.fire(shownRows(panel)[2], "OnReceiveDrag")
+    eq(S.Link.Get("A"), 8)
+    carrying = 7
+    Fake.fire(panel.frame, "OnReceiveDrag")
+    eq(S.Link.Get("A"), 7)
+    eq(#events, 1, "tracking was announced once")
+    GetCursorInfo, ClearCursor = nil, nil
+    Fake.uninstall()
+end)
+
+test("dropping something that is not an item is ignored by the watchlist", function()
+    local S = setup()
+    S.ItemInfo.Exists = function(id) return id ~= 555 end
+    GetCursorInfo = function() return "item", 555 end
+    ClearCursor = function() end
+    local panel = panelFor(S)
+    Fake.fire(panel.list, "OnReceiveDrag")
+    eq(S.tracked:Has(555), false, "an ID the game says does not exist is not tracked")
+    eq(S.Link.Get("A"), nil)
+    GetCursorInfo, ClearCursor = nil, nil
+    Fake.uninstall()
+end)
+
+test("the watchlist shows its own drop cue while an item is carried", function()
+    local S = setup()
+    local panel = panelFor(S)
+    local cue
+    for _, o in ipairs(Fake.objects) do if o.kind == "FontString" and o.text == "Drop to track this item" then cue = o end end
+    eq(cue ~= nil, true, "worded for tracking, not charting")
+    GetCursorInfo = function() return "item", 5 end
+    local watcher
+    for _, o in ipairs(Fake.objects) do if o.events and o.events["CURSOR_CHANGED"] then watcher = o end end
+    Fake.fire(watcher, "OnEvent", "CURSOR_CHANGED")
+    eq(cue.parent.shown, true)
+    GetCursorInfo = function() return nil end
+    Fake.fire(watcher, "OnEvent", "CURSOR_CHANGED")
+    eq(cue.parent.shown, false)
+    GetCursorInfo = nil
+    Fake.uninstall()
+end)
