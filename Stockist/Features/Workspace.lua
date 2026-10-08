@@ -73,7 +73,12 @@ local function build()
         name = "StockistWorkspace", title = "Stockist", width = 1040, height = 640, minWidth = 700, minHeight = 460,
         search = true, -- an item search box in the middle of the title bar
     })
-    Stockist.ItemPicker.Attach(win.searchBox, function(itemID) Stockist.Link.Select("A", itemID) end)
+    local function choose(itemID) Stockist.Link.Select("A", itemID) end
+    Stockist.ItemPicker.Attach(win.searchBox, choose)
+    -- An item dropped anywhere on the workspace (background, title bar) goes to the main group; panels
+    -- that take drops themselves are handled by the panels.
+    Stockist.ItemPicker.AcceptDrops(win.frame, choose)
+    Stockist.ItemPicker.AcceptDrops(win.bar, choose)
     cells = {}
     for i, def in ipairs(layout.cells) do
         local frame = CreateFrame("Frame", nil, win.content)

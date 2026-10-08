@@ -134,6 +134,7 @@ local function buildRow(self, parent)
     row:SetScript("OnClick", function(r)
         if r.itemID then self:Select(r.itemID) end
     end)
+    Stockist.ItemPicker.AcceptDrops(row, function(itemID) self:Select(itemID) end)
     return row
 end
 
@@ -155,6 +156,7 @@ function Watchlist.Create(parent, opts)
     self.list:SetPoint("BOTTOMRIGHT", 0, FOOTER_HEIGHT)
     self.list:EnableMouseWheel(true)
     self.list:SetScript("OnMouseWheel", function(_, delta) self:Scroll(-delta) end)
+    Stockist.ItemPicker.AcceptDrops(self.list, function(itemID) self:Select(itemID) end)
 
     self.empty = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     self.empty:SetPoint("TOPLEFT", self.list, "TOPLEFT", 14, -16)

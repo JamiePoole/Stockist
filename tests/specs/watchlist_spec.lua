@@ -296,3 +296,17 @@ test("the price line in a row is static: no cursor, crosshair or tooltip", funct
     S.Charts.Hover = real
     Fake.uninstall()
 end)
+
+test("dropping an item on the watchlist selects it for the group", function()
+    local S = setup()
+    GetCursorInfo = function() return "item", 8 end
+    ClearCursor = function() end
+    local panel = panelFor(S)
+    Fake.fire(panel.list, "OnReceiveDrag")
+    eq(S.Link.Get("A"), 8, "on the list")
+    S.Link.Select("A", 7)
+    Fake.fire(shownRows(panel)[2], "OnReceiveDrag")
+    eq(S.Link.Get("A"), 8, "and on a row")
+    GetCursorInfo, ClearCursor = nil, nil
+    Fake.uninstall()
+end)

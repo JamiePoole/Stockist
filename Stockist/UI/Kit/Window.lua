@@ -157,5 +157,5 @@ function Window.Create(opts)
     if opts.name then tinsert(UISpecialFrames, opts.name) end -- Esc closes it
     frame:Hide()
 
-    return { frame = frame, content = content, title = title, helpButton = help, searchBox = search }
+    return { frame = frame, content = content, title = title, helpButton = help, searchBox = search, bar = bar }
 end

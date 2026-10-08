@@ -157,6 +157,11 @@ function ChartPanel.Create(parent, opts)
     self.metaChoices = { "" }
     self.chart = Stockist.Charts.Create(frame, { series = {} })
 
+    -- Drop an item on the panel (or the chart itself) to chart it.
+    frame:EnableMouse(true)
+    Stockist.ItemPicker.AcceptDrops(frame, function(itemID) self:Pick(itemID) end, { hint = true })
+    Stockist.ItemPicker.AcceptDrops(self.chart.frame, function(itemID) self:Pick(itemID) end)
+
     -- Legend: the key on the left, "what to look for" (blue) on the right. The text carries its own
     -- colours, so the font strings are plain white by default. Both columns hang from the same line just
     -- under the chart, so their headings are level. Each runs from `leftAnchor` (offset leftX) to
@@ -383,7 +388,7 @@ function ChartPanel:Refresh()
     if not state.itemID then
         return self:ShowStatus({
             kind = "noitem",
-            text = "No item selected. Click \"Choose an item\" above, or pick one from the watchlist.",
+            text = "No item selected. Click \"Choose an item\" above, drop an item here, or pick one from the watchlist.",
         })
     end
     local now = Stockist.Clock.now()
