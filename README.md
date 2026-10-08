@@ -26,6 +26,8 @@ In game, once an Auction House is open: `/stockist scan`, `/stockist`, `/stockis
 
 The chart engine and how to extend it: [docs/charts.md](docs/charts.md).
 
+Data cleanup (`/stockist keep`, `track`, `cleanup`): untracked items keep 7 days of hourly and 180 days of daily candles and are dropped after 90 days without a reading; tracked items keep 30 / 730 days and are never dropped. Every limit can be changed with `/stockist keep <name> <days>`.
+
 Findings about what the Forever client allows (chat channels, Communities, AH API) are in [docs/transport-findings.md](docs/transport-findings.md).
 
 ## Release

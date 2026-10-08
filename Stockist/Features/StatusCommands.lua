@@ -1,11 +1,9 @@
 local ADDON_NAME, Stockist = ...
 
--- Chat-based interface for this early phase. The windowed UI replaces it later; the commands stay
--- as shortcuts. Output goes through Stockist.Print so it can be redirected.
+-- Chat commands for looking at what we hold: status, scan, item, chart, movers, auto. The windowed
+-- UI replaces most of these later; the commands stay as shortcuts.
 local Format = Stockist.Format
-
-local function say(msg) print("|cff33ff99Stockist|r " .. msg) end
-Stockist.Print = say
+local function say(msg) Stockist.Print(msg) end -- looked up per call so tests can redirect output
 
 local function itemName(id)
     local name = C_Item and C_Item.GetItemNameByID and C_Item.GetItemNameByID(id)
@@ -38,7 +36,9 @@ end
 local function status()
     local store = Stockist.store
     local last = Stockist.db.scan.last
-    say(("market '%s': tracking %d items."):format(Stockist.marketKey, #store:Items()))
+    local stats = store:Stats()
+    say(("market '%s': %d items (%d tracked), %d candles stored."):format(
+        Stockist.marketKey, stats.items, stats.tracked, stats.candles))
     if last then
         say(("last scan %s, recorded %d items."):format(
             Format.Age(Stockist.Clock.now() - last), Stockist.db.scan.items or 0))
@@ -82,6 +82,33 @@ local function movers()
     end
 end
 
+local function auto(arg)
+    arg = arg:lower()
+    if arg == "on" then
+        Stockist.settings.autoScan = true
+    elseif arg == "off" then
+        Stockist.settings.autoScan = false
+    elseif arg ~= "" then
+        return say("usage: /stockist auto [on|off]")
+    end
+    say("auto-scan is " .. (Stockist.Scanner:AutoEnabled() and "on" or "off")
+        .. " (scans when the Auction House opens and every 15 minutes while it stays open).")
+end
+
+local function tutorial(arg)
+    arg = arg:lower()
+    if arg == "on" then
+        Stockist.Help.SetTutorial(true)
+    elseif arg == "off" then
+        Stockist.Help.SetTutorial(false)
+    elseif arg == "" then
+        say("tutorial tips are " .. (Stockist.Help.TutorialEnabled() and "on" or "off")
+            .. ". (/stockist tutorial on|off, or the ? button in a window's title bar)")
+    else
+        say("usage: /stockist tutorial [on|off]")
+    end
+end
+
 -- Diagnostic: prints every clock the game exposes so time labels can be checked against a wall clock.
 local function timeinfo()
     local server = GetServerTime()
@@ -114,43 +141,18 @@ local function timeinfo()
     end
 end
 
-local commands = {
-    status = status,
-    time = timeinfo,
-    scan = function()
-        local ok, reason = Stockist.Scanner:Start()
-        if not ok then say("can't scan: " .. reason) end
-    end,
-    item = item,
-    movers = movers,
-    chart = chart,
-    auto = function(arg)
-        arg = arg:lower()
-        if arg == "on" then
-            Stockist.settings.autoScan = true
-        elseif arg == "off" then
-            Stockist.settings.autoScan = false
-        elseif arg ~= "" then
-            return say("usage: /stockist auto [on|off]")
-        end
-        say("auto-scan is " .. (Stockist.Scanner:AutoEnabled() and "on" or "off")
-            .. " (scans when the Auction House opens and every 15 minutes while it stays open).")
-    end,
-}
-
-SLASH_STOCKIST1 = "/stockist"
-SLASH_STOCKIST2 = "/stk"
-SlashCmdList["STOCKIST"] = function(input)
-    if not Stockist.store then return say("not ready yet.") end
-    local cmd, rest = (input or ""):match("^%s*(%S*)%s*(.-)%s*$")
-    if cmd == "" then cmd = "status" end
-    local fn = commands[cmd:lower()]
-    if fn then
-        fn(rest)
-    else
-        say("commands: status, scan, item <id>, chart [id], movers, auto [on|off], time")
-    end
-end
+local C = Stockist.Commands
+C:Register("status", { help = "status              what we hold and when we last scanned", run = status })
+C:Register("scan", { help = "scan                scan the Auction House now", run = function()
+    local ok, reason = Stockist.Scanner:Start()
+    if not ok then say("can't scan: " .. reason) end
+end })
+C:Register("item", { help = "item <id|link>      latest price and 24h change", run = item })
+C:Register("chart", { help = "chart [id|link]     open the price window", run = chart })
+C:Register("movers", { help = "movers              biggest 24h risers and fallers", run = movers })
+C:Register("auto", { help = "auto [on|off]       re-scan while the Auction House is open", run = auto })
+C:Register("tutorial", { help = "tutorial [on|off]   long explanations in tooltips and the chart legend", run = tutorial })
+C:Register("time", { help = "time                print the game's clocks next to stored scan times (debugging)", run = timeinfo })
 
 -- Report scan outcomes.
 Stockist.Events:On("SCAN_COMPLETE", function(count)

@@ -12,15 +12,30 @@ Stockist.ReadingStore = Store
 
 local RESOLUTIONS = { hourly = Rollup.HOUR, daily = Rollup.DAY }
 
+--- Retention options (all optional; seconds):
+---   hourlyKeepSec, dailyKeepSec          how long candles are kept
+---   trackedHourlyKeepSec, trackedDailyKeepSec   the same for tracked items (default: same as above)
+---   idleKeepSec     remove an untracked item whose newest reading is older than this (default: never)
+---   maxCandles      hard cap on stored candles (default: none)
+---   isTracked       function(itemID) -> boolean
 function Store.New(db, opts)
-    opts = opts or {}
     db.items = db.items or {}
     db.meta = db.meta or {}
-    return setmetatable({
-        db = db,
-        hourlyKeep = opts.hourlyKeepSec or 7 * 86400,
-        dailyKeep = opts.dailyKeepSec or 180 * 86400,
-    }, Store)
+    local store = setmetatable({ db = db }, Store)
+    store:Configure(opts)
+    return store
+end
+
+--- Replace the retention options (used when the player changes a limit).
+function Store:Configure(opts)
+    opts = opts or {}
+    self.hourlyKeep = opts.hourlyKeepSec or 7 * 86400
+    self.dailyKeep = opts.dailyKeepSec or 180 * 86400
+    self.trackedHourlyKeep = opts.trackedHourlyKeepSec or self.hourlyKeep
+    self.trackedDailyKeep = opts.trackedDailyKeepSec or self.dailyKeep
+    self.idleKeep = opts.idleKeepSec
+    self.maxCandles = opts.maxCandles
+    self.isTracked = opts.isTracked
 end
 
 local function validReading(r)
@@ -185,20 +200,97 @@ function Store:Change(itemID, windowSec, now)
     return (last.price - ref) / ref * 100, ref
 end
 
---- Drop candles older than the retention windows. Returns how many were removed.
-function Store:Prune(now)
+local function countKeys(t)
+    local n = 0
+    for _ in pairs(t) do n = n + 1 end
+    return n
+end
+
+--- When we last heard about an item: its latest reading, else its newest candle.
+local function lastSeen(it)
+    if it.last then return it.last.ts end
+    local newest = 0
+    for _, c in pairs(it.hourly) do if c.ct > newest then newest = c.ct end end
+    for _, c in pairs(it.daily) do if c.ct > newest then newest = c.ct end end
+    return newest
+end
+
+function Store:_tracked(itemID)
+    return self.isTracked ~= nil and self.isTracked(itemID) == true
+end
+
+--- Counts: { items, tracked, hourly, daily, candles }.
+function Store:Stats()
+    local s = { items = 0, tracked = 0, hourly = 0, daily = 0, candles = 0 }
+    for id, it in pairs(self.db.items) do
+        s.items = s.items + 1
+        if self:_tracked(id) then s.tracked = s.tracked + 1 end
+        s.hourly = s.hourly + countKeys(it.hourly)
+        s.daily = s.daily + countKeys(it.daily)
+    end
+    s.candles = s.hourly + s.daily
+    return s
+end
+
+--- Delete the oldest candles of one kind until the total is back under the cap.
+--- Returns how many were deleted.
+function Store:_trim(resolution, tracked, excess)
+    local victims = {}
+    for id, it in pairs(self.db.items) do
+        if self:_tracked(id) == tracked then
+            for t in pairs(it[resolution]) do victims[#victims + 1] = { id = id, t = t } end
+        end
+    end
+    table.sort(victims, function(a, b) return a.t < b.t end)
     local removed = 0
-    local keep = { hourly = self.hourlyKeep, daily = self.dailyKeep }
-    for _, it in pairs(self.db.items) do
-        for res, size in pairs(keep) do
-            local cutoff = now - size
-            for t in pairs(it[res]) do
-                if t < cutoff then
-                    it[res][t] = nil
-                    removed = removed + 1
+    for i = 1, math.min(excess, #victims) do
+        self.db.items[victims[i].id][resolution][victims[i].t] = nil
+        removed = removed + 1
+    end
+    return removed
+end
+
+--- Enforce retention. Untracked items use the normal windows and are removed entirely once idle;
+--- tracked items use the longer windows and are never removed. If the candle total still exceeds
+--- the cap, the oldest untracked hourly data goes first, then untracked daily, then tracked.
+--- Returns the number of candles removed and a stats table { candles, items, capped }.
+function Store:Prune(now)
+    local removedCandles, removedItems = 0, 0
+
+    for id, it in pairs(self.db.items) do
+        local tracked = self:_tracked(id)
+        if not tracked and self.idleKeep and lastSeen(it) < now - self.idleKeep then
+            removedCandles = removedCandles + countKeys(it.hourly) + countKeys(it.daily)
+            self.db.items[id] = nil
+            self.db.meta[id] = nil
+            removedItems = removedItems + 1
+        else
+            local keep = {
+                hourly = tracked and self.trackedHourlyKeep or self.hourlyKeep,
+                daily = tracked and self.trackedDailyKeep or self.dailyKeep,
+            }
+            for res, seconds in pairs(keep) do
+                local cutoff = now - seconds
+                for t in pairs(it[res]) do
+                    if t < cutoff then
+                        it[res][t] = nil
+                        removedCandles = removedCandles + 1
+                    end
                 end
             end
         end
     end
-    return removed
+
+    local capped = 0
+    if self.maxCandles then
+        local excess = self:Stats().candles - self.maxCandles
+        for _, pass in ipairs({ { "hourly", false }, { "daily", false }, { "hourly", true }, { "daily", true } }) do
+            if excess <= 0 then break end
+            local n = self:_trim(pass[1], pass[2], excess)
+            capped, excess = capped + n, excess - n
+        end
+    end
+
+    local total = removedCandles + capped
+    return total, { candles = total, items = removedItems, capped = capped }
 end
