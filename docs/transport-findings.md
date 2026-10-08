@@ -34,6 +34,8 @@ All of these exist as functions: `ReplicateItems`, `GetNumReplicateItems`, `GetR
 `GetNumCommoditySearchResults`, `GetCommoditySearchResultInfo`,
 `GetCommoditySearchResultsQuantity`, `GetItemKeyInfo`, `MakeItemKey`.
 
+`ReplicateItems` (the full scan) has a server-side wait of about 15 minutes. A request made during the wait is not answered: no `REPLICATE_ITEM_LIST_UPDATE` arrives. Observed 2026-10-08: closing the window mid-scan and reopening made the next request hang forever. Auctionator starts its own wait when it makes the request, not when the scan finishes, and so does Stockist now (`db.scan.requested`); a request unanswered after 45 seconds is given up. Not yet confirmed: whether a request cancelled by closing the window really counts toward the wait (consistent with what we saw).
+
 Auctionator (installed in the same client) uses the same modern commodity AH. Its full scan is the
 model for `Market/AuctionScanner.lua`.
 
