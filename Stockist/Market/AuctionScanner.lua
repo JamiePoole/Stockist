@@ -18,55 +18,93 @@ local BATCH = 500
 local TRADE_GOODS = (Enum and Enum.ItemClass and Enum.ItemClass.Tradegoods) or 7
 
 -- How long we wait for the server's answer before giving up. The server ignores a ReplicateItems request
--- made during its cooldown, so without this a refused request would leave a scan "in progress" forever.
+-- made during its wait, so without this an ignored request would leave a scan "in progress" forever.
 local ANSWER_TIMEOUT = 45
+-- After an ignored request, retry after 2 minutes, then 4, 8 ... up to 15: this finds the end of the
+-- server's wait without hammering it.
+local BACKOFF_FIRST, BACKOFF_MAX = 120, 900
+local LOG_SIZE = 10 -- recent requests kept in the saved data, to learn how the server behaves
 
---- Seconds until the server will answer another full scan. The wait runs from when the last request was
---- MADE (as in Auctionator), not from when it finished: closing the window half way through a scan does
---- not give the request back.
+--- Seconds until it is worth sending another full-scan request. Two things hold us back:
+---  * the server's wait, which runs from when the last request was MADE (as in Auctionator), not from
+---    when it finished: closing the window half way through a scan does not give the request back;
+---  * a short retry delay after a request the server ignored.
 function Scanner:SecondsUntilNextScan()
     local scan = Stockist.db.scan
+    local now = Stockist.Clock.now()
     local since = math.max(scan.last or 0, scan.requested or 0)
-    return math.max(0, since + Stockist.Config.scan.minIntervalSec - Stockist.Clock.now())
+    local wait = since + Stockist.Config.scan.minIntervalSec - now
+    local retry = (scan.retryAt or 0) - now
+    return math.max(0, wait, retry)
 end
 
 local function waitText(seconds)
     return ("%d:%02d"):format(math.floor(seconds / 60), seconds % 60)
 end
 
---- Begin a scan. Returns true, or false plus a human-readable reason.
-function Scanner:Start()
+local function logRequest(scan, entry)
+    scan.log = scan.log or {}
+    scan.log[#scan.log + 1] = entry
+    while #scan.log > LOG_SIZE do table.remove(scan.log, 1) end
+end
+
+--- Begin a scan. `force` skips our own wait (the server may still ignore the request). Returns true, or
+--- false plus a human-readable reason.
+function Scanner:Start(force)
     if self.inProgress then return false, "a scan is already running" end
     if not self.ahOpen then return false, "open the Auction House first" end
     local wait = self:SecondsUntilNextScan()
-    if wait > 0 then
+    if wait > 0 and not force then
         return false, "next scan available in " .. waitText(wait)
     end
 
+    local scan = Stockist.db.scan
+    local now = Stockist.Clock.now()
     self.inProgress = true
     self.gotAnswer = false
     self.scanId = (self.scanId or 0) + 1
     local id = self.scanId
-    local previousRequest = Stockist.db.scan.requested
-    Stockist.db.scan.requested = Stockist.Clock.now()
+    local previousRequest = scan.requested
+    scan.requested = now
     self.frame:RegisterEvent("REPLICATE_ITEM_LIST_UPDATE")
     local ok, err = pcall(C_AuctionHouse.ReplicateItems)
     if not ok then
         -- The client refused the call, so the server never saw a request: it starts no wait. Release the
         -- scan quietly; the caller reports the reason (once) to the player.
-        Stockist.db.scan.requested = previousRequest
+        scan.requested = previousRequest
         self.inProgress = false
         self.frame:UnregisterEvent("REPLICATE_ITEM_LIST_UPDATE")
         return false, "the Auction House refused the request: " .. tostring(err)
     end
+    local entry = { at = now }
+    self.currentRequest = entry
+    logRequest(scan, entry)
     Stockist.Events:Fire("SCAN_STARTED")
 
     C_Timer.After(ANSWER_TIMEOUT, function()
         if self.inProgress and self.scanId == id and not self.gotAnswer then
-            self:Abort(("no answer from the server after %d seconds; it may still be on its wait from an earlier scan"):format(ANSWER_TIMEOUT))
+            -- An ignored request starts no wait of its own: forget it, and retry after a growing delay.
+            entry.answered = false
+            scan.requested = previousRequest
+            scan.misses = (scan.misses or 0) + 1
+            scan.retryAt = Stockist.Clock.now() + math.min(BACKOFF_MAX, BACKOFF_FIRST * 2 ^ (scan.misses - 1))
+            self:Abort(("no answer from the server after %d seconds; it is probably still on its wait from an earlier scan"):format(ANSWER_TIMEOUT))
         end
     end)
     return true
+end
+
+--- The server answered our request: it is no longer ignoring us.
+function Scanner:NoteAnswered()
+    self.gotAnswer = true
+    local scan = Stockist.db and Stockist.db.scan
+    if not scan then return end
+    scan.misses, scan.retryAt = 0, nil
+    local entry = self.currentRequest
+    if entry then
+        entry.answered = true
+        entry.seconds = Stockist.Clock.now() - entry.at
+    end
 end
 
 --- Auto-scan is on unless the player turned it off (account-wide setting).
@@ -198,7 +236,7 @@ frame:SetScript("OnEvent", function(_, event)
         Stockist.Events:Fire("AH_CLOSED")
         Scanner:Abort("Auction House closed during the scan")
     elseif event == "REPLICATE_ITEM_LIST_UPDATE" then
-        Scanner.gotAnswer = true
+        Scanner:NoteAnswered()
         frame:UnregisterEvent("REPLICATE_ITEM_LIST_UPDATE")
         Scanner:Collect()
     end

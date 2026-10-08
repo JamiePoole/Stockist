@@ -143,8 +143,8 @@ end
 
 local C = Stockist.Commands
 C:Register("status", { help = "status              what we hold and when we last scanned", run = status })
-C:Register("scan", { help = "scan                scan the Auction House now", run = function()
-    local ok, reason = Stockist.Scanner:Start()
+C:Register("scan", { help = "scan [force]        scan the Auction House now (force: ignore our own wait)", run = function(arg)
+    local ok, reason = Stockist.Scanner:Start(arg:lower() == "force")
     if not ok then say("can't scan: " .. reason) end
 end })
 C:Register("item", { help = "item <id|link>      latest price and 24h change", run = item })
