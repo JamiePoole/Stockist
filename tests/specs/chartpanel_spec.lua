@@ -430,7 +430,7 @@ end)
 local function headerMeasure(panel)
     local m = { name = panel.nameText:GetStringWidth(), price = panel.priceText:GetStringWidth(),
         scan = panel.scanText:GetStringWidth() }
-    m.fixed = m.price + (m.scan > 0 and 8 + m.scan or 0)
+    m.fixed = (m.price > 0 and 12 + m.price or 0) + (m.scan > 0 and ((m.price > 0 and 8 or 12) + m.scan) or 0)
     m.choices = panel.metaChoices
     local function meta(text)
         panel.metaText:SetText(text)
@@ -448,7 +448,7 @@ local function longNamePanel(S)
 end
 
 local function widthFor(panel, m, metaWidth, nameWidth)
-    return panel.controlsWidth + 10 + nameWidth + 12 + m.fixed + metaWidth
+    return panel.controlsWidth + 10 + nameWidth + m.fixed + metaWidth
 end
 
 test("a wide panel shows the whole header", function()
@@ -494,15 +494,15 @@ test("the text never reaches the buttons, however narrow the panel gets", functi
     for _, w in ipairs({ 600, 450, 380, 330, 300 }) do
         panel.frame:SetWidth(w)
         panel:LayoutHeader()
-        local used = panel.nameText.size[1] + 12 + m.fixed
+        local used = panel.nameText.size[1] + m.fixed
         if panel.metaText.text ~= "" then used = used + 12 + panel.metaText:GetStringWidth() end
         local limit = w - panel.controlsWidth - 10
         -- the name has a floor, so only check while that floor still leaves room
-        if limit >= 40 + 12 + m.fixed then eq(used <= limit, true, "width " .. w) end
+        if limit >= 1 + m.fixed then eq(used <= limit, true, "width " .. w) end
     end
     panel.frame:SetWidth(100) -- absurdly narrow: the name floor holds and nothing errors
     panel:LayoutHeader()
-    eq(panel.nameText.size[1], 40)
+    eq(panel.nameText.size[1], 1, "the name has no room left, but nothing breaks")
     Fake.uninstall()
 end)
 
@@ -514,6 +514,9 @@ test("'no data yet' outranks the item name", function()
     panel.frame:SetWidth(panel.controlsWidth + 10 + 150)
     panel:LayoutHeader()
     eq(panel.metaText.text, "no data yet", "the reason for the empty chart stays")
+    -- flush to the margin, not past it: the name plus gap plus message ends exactly where the margin begins
+    local m = panel.metaText:GetStringWidth()
+    eq(panel.nameText.size[1] + 12 + m, 150, "name, one gap and the message fill the room exactly")
     eq(panel.nameText.size[1] < panel.nameText:GetStringWidth(), true, "the name is what gets shortened")
     Fake.uninstall()
 end)

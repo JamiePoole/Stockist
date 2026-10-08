@@ -12,7 +12,6 @@ Stockist.ChartPanel = ChartPanel
 
 local LEGEND_GAP = 12 -- empty space between the chart and the legend below it
 local HEADER_MARGIN = 10 -- clear space kept between the header text and the buttons
-local MIN_NAME_WIDTH = 40
 
 --- A switch button: coloured while on (and usable), plain while off, greyed text when it cannot be used.
 local function paintToggle(btn, on, enabled)
@@ -237,9 +236,19 @@ function ChartPanel:LayoutHeader()
     local width = self.frame:GetWidth()
     local natural = self.nameText:GetStringWidth()
     local price, scan = self.priceText:GetStringWidth(), self.scanText:GetStringWidth()
-    local fixed = price + (scan > 0 and (8 + scan) or 0)
+    local fixed = (price > 0 and (12 + price) or 0) + (scan > 0 and ((price > 0 and 8 or 12) + scan) or 0) -- with their gaps
     local room = width - self.controlsWidth - HEADER_MARGIN
     local choices = self.metaChoices
+
+    -- Empty pieces take no room: each piece hangs from the last one that has text, so the gaps between the
+    -- pieces that are shown are exactly the ones counted below.
+    self.priceText:ClearAllPoints()
+    self.priceText:SetPoint("LEFT", self.nameText, "RIGHT", 12, 0)
+    self.scanText:ClearAllPoints()
+    self.scanText:SetPoint("LEFT", price > 0 and self.priceText or self.nameText, "RIGHT", price > 0 and 8 or 12, 0)
+    self.metaText:ClearAllPoints()
+    self.metaText:SetPoint("LEFT", scan > 0 and self.scanText or (price > 0 and self.priceText or self.nameText),
+        "RIGHT", 12, 0)
 
     local chosen, meta = choices[1], 0
     if width > 1 then
@@ -247,7 +256,7 @@ function ChartPanel:LayoutHeader()
         for _, text in ipairs(choices) do
             self.metaText:SetText(text)
             local w = text ~= "" and (12 + self.metaText:GetStringWidth()) or 0
-            if natural + 12 + fixed + w <= room then chosen, meta = text, w break end
+            if natural + fixed + w <= room then chosen, meta = text, w break end
         end
         if not chosen then
             -- Nothing fits next to the whole name: keep a message, drop the rest, and shorten the name.
@@ -259,8 +268,8 @@ function ChartPanel:LayoutHeader()
     self.metaText:SetText(chosen)
 
     local nameWidth = natural + 1
-    if width > 1 and natural + 12 + fixed + meta > room then
-        nameWidth = math.max(MIN_NAME_WIDTH, room - 12 - fixed - meta)
+    if width > 1 and natural + fixed + meta > room then
+        nameWidth = room - fixed - meta
     end
     self.nameText:SetWidth(math.max(1, nameWidth))
     self.nameHit:SetSize(math.max(1, math.min(natural, nameWidth)), math.max(1, self.nameText:GetStringHeight()))
