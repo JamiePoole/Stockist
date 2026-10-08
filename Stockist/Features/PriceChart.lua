@@ -8,12 +8,18 @@ local Format = Stockist.Format
 local PriceChart = {}
 Stockist.PriceChart = PriceChart
 
+-- `prefer` lists the data kinds to try, best first: "ticks" (one point per scan), "hourly" and
+-- "daily" candles. The first kind with at least MIN_POINTS points is used, so a young data set
+-- falls back to finer detail instead of showing a single mark.
 local TIMEFRAMES = {
-    { key = "1D", res = "hourly", span = 86400, ticks = true },
-    { key = "1W", res = "hourly", span = 7 * 86400 },
-    { key = "1M", res = "daily", span = 30 * 86400 },
-    { key = "ALL", res = "daily", span = nil },
+    { key = "1D", span = 86400, prefer = { "ticks", "hourly" } },
+    { key = "1W", span = 7 * 86400, prefer = { "hourly", "ticks" } },
+    { key = "1M", span = 30 * 86400, prefer = { "daily", "hourly", "ticks" } },
+    { key = "ALL", span = nil, prefer = { "daily", "hourly", "ticks" } },
 }
+local MIN_POINTS = 3
+local RESOLUTION = { ticks = 60, hourly = 3600, daily = 86400 }
+local KIND_NAME = { ticks = "one point per scan", hourly = "hourly candles", daily = "daily candles" }
 PriceChart.TIMEFRAMES = TIMEFRAMES
 
 --- Help topics the window attaches to its widgets (checked by tests against Core/HelpTopics.lua).
@@ -28,32 +34,46 @@ local function timeframe(key)
     return TIMEFRAMES[2]
 end
 
---- Chart config for an item.
----   indicators = { sma = bool, bollinger = bool }
---- The 1D view plots every scan as a point on a line, so it is useful from the second scan on. Longer
---- views summarise scans into hourly or daily candles.
-function PriceChart.BuildConfig(store, itemID, key, indicators, now, tzOffset)
-    local tf = timeframe(key)
-    local fromTs = tf.span and (now - tf.span) or nil
-
-    local pricePane, supply = nil, {}
-    local ticks = tf.ticks and store:Ticks(itemID, fromTs) or {}
-    local resolution = (tf.res == "daily") and 86400 or 3600
-    if #ticks > 0 then
-        resolution = 60
+--- The price series and supply bars for one kind of data: { price = series spec, supply = points, count }.
+local function seriesFor(store, itemID, kind, fromTs)
+    local supply = {}
+    if kind == "ticks" then
+        local ticks = store:Ticks(itemID, fromTs)
         local line = {}
         for i, t in ipairs(ticks) do
             line[i] = { x = t.x, y = t.y }
             supply[i] = { x = t.x, y = t.q, up = (i == 1) or t.y >= ticks[i - 1].y }
         end
-        pricePane = { type = "line", id = "price", label = "price", points = line }
-    else
-        local points = {}
-        for i, c in ipairs(store:GetCandles(itemID, tf.res, fromTs, nil)) do
-            points[i] = { x = c.t, o = c.o, h = c.h, l = c.l, c = c.c }
-            supply[i] = { x = c.t, y = c.q, up = c.c >= c.o }
-        end
-        pricePane = { type = "candle", id = "price", points = points }
+        return { price = { type = "line", id = "price", label = "price", points = line }, supply = supply, count = #line }
+    end
+    local points = {}
+    for i, c in ipairs(store:GetCandles(itemID, kind, fromTs, nil)) do
+        points[i] = { x = c.t, o = c.o, h = c.h, l = c.l, c = c.c }
+        supply[i] = { x = c.t, y = c.q, up = c.c >= c.o }
+    end
+    return { price = { type = "candle", id = "price", points = points }, supply = supply, count = #points }
+end
+
+--- Chart config for an item.
+---   indicators = { sma = bool, bollinger = bool }
+--- Each view prefers one kind of data (see TIMEFRAMES) and falls back to a finer kind while it has
+--- fewer than MIN_POINTS points; the chart says so in a corner note.
+function PriceChart.BuildConfig(store, itemID, key, indicators, now, tzOffset)
+    local tf = timeframe(key)
+    local fromTs = tf.span and (now - tf.span) or nil
+
+    local chosen, chosenKind, richest, richestKind
+    for _, kind in ipairs(tf.prefer) do
+        local s = seriesFor(store, itemID, kind, fromTs)
+        if s.count >= MIN_POINTS then chosen, chosenKind = s, kind break end
+        if not richest or s.count > richest.count then richest, richestKind = s, kind end
+    end
+    if not chosen then chosen, chosenKind = richest, richestKind end
+
+    local pricePane, supply, resolution = chosen.price, chosen.supply, RESOLUTION[chosenKind]
+    local note
+    if chosenKind ~= tf.prefer[1] then
+        note = ("Not enough history yet for %s: showing %s"):format(KIND_NAME[tf.prefer[1]], KIND_NAME[chosenKind])
     end
 
     local overlays = {}
@@ -64,6 +84,7 @@ function PriceChart.BuildConfig(store, itemID, key, indicators, now, tzOffset)
     return {
         x = { format = "time", tzOffset = tzOffset or 0, resolution = resolution },
         emptyText = "No readings in this range yet",
+        note = note,
         panes = {
             {
                 id = "price", weight = 3, title = "Price", axis = { format = "money" },

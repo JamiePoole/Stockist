@@ -45,8 +45,48 @@ test("1D plots one point per scan, so two scans in the same hour are two points"
     eq(#day.panes[1].series[1].points, 5)
     eq(#day.panes[2].series[1].points, 5)
     eq(#store:GetCandles(9, "hourly"), 2, "hourly candles would have shown one or two dashes")
+    -- two hourly candles are too few for the week view, so it shows the scan points too
     local week = S.PriceChart.BuildConfig(store, 9, "1W", {}, now, 0)
-    eq(week.panes[1].series[1].type, "candle")
+    eq(week.panes[1].series[1].type, "line")
+    eq(week.note ~= nil, true)
+end)
+
+test("a month view with a single day of history falls back to finer detail and says so", function()
+    local S = setup()
+    local store = S.ReadingStore.New({})
+    local now = 40 * DAY + 5 * HOUR
+    for i = 0, 7 do store:Add({ item = 4, ts = now - 2 * HOUR + i * 900, price = 100 + i, qty = 5 }) end
+    eq(#store:GetCandles(4, "daily"), 1)
+    local month = S.PriceChart.BuildConfig(store, 4, "1M", {}, now, 0)
+    eq(month.panes[1].series[1].type, "line", "scan points, not one lonely daily candle")
+    eq(#month.panes[1].series[1].points, 8)
+    eq(month.x.resolution, 60)
+    eq(month.note ~= nil and month.note:find("daily candles", 1, true) ~= nil, true)
+end)
+
+test("a month view with enough daily candles stays daily, with no note", function()
+    local S = setup()
+    local store = S.ReadingStore.New({})
+    local now = 40 * DAY
+    for d = 1, 5 do store:Add({ item = 4, ts = now - d * DAY + HOUR, price = 100 + d, qty = 5 }) end
+    local month = S.PriceChart.BuildConfig(store, 4, "1M", {}, now, 0)
+    eq(month.panes[1].series[1].type, "candle")
+    eq(#month.panes[1].series[1].points, 5)
+    eq(month.x.resolution, 86400)
+    is_nil(month.note)
+end)
+
+test("the fallback note is drawn on the chart", function()
+    local S = setup()
+    local store = S.ReadingStore.New({})
+    local now = 40 * DAY + 5 * HOUR
+    for i = 0, 7 do store:Add({ item = 4, ts = now - 2 * HOUR + i * 900, price = 100 + i, qty = 5 }) end
+    local model = S.Charts.Build(S.PriceChart.BuildConfig(store, 4, "ALL", {}, now, 0), 640, 360)
+    local canvas = new_recording_canvas()
+    S.Charts.Draw(model, canvas)
+    local notes = canvas:find("text", function(o) return o.anchor == "TOPRIGHT" end)
+    eq(#notes, 1)
+    eq(notes[1].str:find("Not enough history", 1, true) ~= nil, true)
 end)
 
 test("1D falls back to candles when there are no recorded scans", function()

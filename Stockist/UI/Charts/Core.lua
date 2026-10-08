@@ -207,6 +207,11 @@ function Charts.Draw(model, canvas)
         return
     end
     if not model.config.minimal then drawAxes(model, canvas) end
+    if model.config.note then
+        local plot = model.plot
+        canvas:text(plot.x + plot.w - 6, plot.y + plot.h - 4, model.config.note,
+            { t.text[1], t.text[2], t.text[3], 0.55 }, "TOPRIGHT")
+    end
     for _, pane in ipairs(model.panes) do
         for _, entry in ipairs(pane.entries) do
             entry.plugin.draw(entry.spec, paneContext(model, pane, entry, canvas))
