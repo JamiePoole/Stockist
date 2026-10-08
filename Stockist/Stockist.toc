@@ -44,6 +44,7 @@ UI\Kit\Button.lua
 UI\Kit\IconButton.lua
 UI\Kit\Window.lua
 Features\PriceChart.lua
+Features\ItemPicker.lua
 Features\ChartPanel.lua
 Features\Watchlist.lua
 Features\Workspace.lua

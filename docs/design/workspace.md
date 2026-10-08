@@ -62,6 +62,8 @@ Steps that fall out of this:
 3. ~~Link groups~~ Done: `Core/Link.lua`. Panels in the same group follow the same selected item (`Link.Select(group, item)` fires `LINK_SELECTED`). The item picker (#6) is still to do.
 4. ~~Pop-out~~ Done for the chart: a "Pop out" button in the chart panel header opens the item in its own window. Saved layouts are still to do.
 
+5. ~~Item picker~~ Done: `Features/ItemPicker.lua`. Click the item name in a chart header for a searchable dropdown (watchlist first, then everything else; an ID or link can be pasted to open an item with no data). `/stockist chart <name>` searches the same list. Drag and drop (#43) and a track toggle in the picker are still to do.
+
 The chart engine, window kit, tooltips and help topics are already reusable and stay as they are.
 
 ## Open questions

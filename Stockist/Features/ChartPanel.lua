@@ -34,6 +34,7 @@ local function showItemTooltip(owner, itemID)
     else
         GameTooltip:SetHyperlink("item:" .. itemID)
     end
+    GameTooltip:AddLine("Click to pick another item", 0.55, 0.62, 0.75)
     GameTooltip:Show()
 end
 
@@ -71,6 +72,11 @@ function ChartPanel.Create(parent, opts)
         if self.state.itemID and self.statusKind ~= "notfound" then showItemTooltip(hit, self.state.itemID) end
     end)
     self.nameHit:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    -- Clicking the name opens the item picker under it.
+    self.nameHit:SetScript("OnMouseUp", function(hit)
+        GameTooltip:Hide()
+        Stockist.ItemPicker.Show(hit, function(itemID) self:Pick(itemID) end)
+    end)
 
     self.priceText = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     self.priceText:SetPoint("LEFT", self.nameText, "RIGHT", 12, 0)
@@ -201,6 +207,16 @@ function ChartPanel:PopOut()
     if self.state.itemID then Stockist.PriceChart.Show(self.state.itemID) end
 end
 
+--- The player chose an item (from the picker): select it for the whole link group, or just here if unlinked.
+function ChartPanel:Pick(itemID)
+    if self.link then
+        Stockist.Link.Select(self.link, itemID)
+        if self.state.itemID ~= itemID then self:SetItem(itemID) end
+    else
+        self:SetItem(itemID)
+    end
+end
+
 function ChartPanel:SetItem(itemID)
     self.state.itemID = itemID
     self:Refresh()
@@ -284,7 +300,7 @@ function ChartPanel:ShowStatus(status)
         self.nameText:SetText(Format.Colored("Item not found", 0.92, 0.3, 0.3))
         self.metaChoices = { "" }
     elseif status.kind == "noitem" then
-        self.nameText:SetText("")
+        self.nameText:SetText(Format.Colored("Choose an item", 0.6, 0.8, 1)) -- click it for the picker
         self.metaChoices = { "" }
     else
         self.nameText:SetText(Stockist.ItemInfo.ColoredName(state.itemID))
@@ -328,7 +344,7 @@ function ChartPanel:Refresh()
     if not state.itemID then
         return self:ShowStatus({
             kind = "noitem",
-            text = "No item selected. Pick one from the watchlist, or open one with /stockist workspace <item>.",
+            text = "No item selected. Click \"Choose an item\" above, or pick one from the watchlist.",
         })
     end
     local now = Stockist.Clock.now()

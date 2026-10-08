@@ -39,7 +39,19 @@ local function chart(arg)
     local id
     if arg ~= "" then
         id = parseItemID(arg)
-        if not id then return say("usage: /stockist chart [itemID or item link]") end
+        if not id then
+            -- Not an ID or link: look for items whose name contains the text, among those we know prices for.
+            local found = Stockist.ItemPicker.Search(Stockist.ItemPicker.Source(), arg)
+            if #found == 0 then
+                return say(("no item with prices matches '%s'. Give an item ID or link, or click the item name in the chart to pick one."):format(arg))
+            elseif #found > 1 then
+                local names = {}
+                for i = 1, math.min(5, #found) do names[i] = ("%s (%d)"):format(found[i].name, found[i].id) end
+                return say(("%d items match '%s': %s%s. Be more specific, or use an ID."):format(
+                    #found, arg, table.concat(names, ", "), #found > 5 and ", ..." or ""))
+            end
+            id = found[1].id
+        end
     else
         id = richestItem()
         if not id then return say("no data yet. Open the Auction House to take a reading, or give an item ID.") end
@@ -164,7 +176,7 @@ C:Register("scan", { help = "scan [force]        scan the Auction House now (for
     if not ok then say("can't scan: " .. reason) end
 end })
 C:Register("item", { help = "item <id|link>      latest price and 24h change", run = item })
-C:Register("chart", { help = "chart [id|link]     open the price window", run = chart })
+C:Register("chart", { help = "chart [name|id|link] open the price window", run = chart })
 C:Register("movers", { help = "movers              biggest 24h risers and fallers", run = movers })
 C:Register("auto", { help = "auto [on|off]       re-scan while the Auction House is open", run = auto })
 C:Register("tutorial", { help = "tutorial [on|off]   long explanations in tooltips and the chart legend", run = tutorial })
