@@ -1,6 +1,6 @@
 local function setup()
     local S = load_addon("Core/EventBus.lua", "Core/Registry.lua", "Core/Format.lua", "Core/Commands.lua",
-        "Core/Help.lua", "Core/HelpTopics.lua", "Features/StatusCommands.lua")
+        "Core/Help.lua", "Core/HelpTopics.lua", "UI/Kit/Button.lua", "Features/StatusCommands.lua")
     local out = {}
     S.Print = function(msg) out[#out + 1] = msg end
     S.settings = {}

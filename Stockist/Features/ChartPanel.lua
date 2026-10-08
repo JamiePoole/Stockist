@@ -12,11 +12,10 @@ Stockist.ChartPanel = ChartPanel
 
 local LEGEND_GAP = 12 -- empty space between the chart and the legend below it
 
+--- A switch button: coloured while on (and usable), plain while off, greyed text when it cannot be used.
 local function paintToggle(btn, on, enabled)
-    local fs = btn:GetFontString()
-    if not enabled then fs:SetTextColor(0.5, 0.5, 0.5)
-    elseif on then fs:SetTextColor(0.3, 1, 0.5)
-    else fs:SetTextColor(1, 0.82, 0) end
+    Stockist.UI.Button.SetActive(btn, on and enabled)
+    if not enabled then btn:GetFontString():SetTextColor(0.5, 0.5, 0.5) end
 end
 
 local function button(parent, text, width, helpKey, extra)

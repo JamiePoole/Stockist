@@ -224,6 +224,70 @@ test("scope buttons go back to normal when a message replaces the chart", functi
     Fake.uninstall()
 end)
 
+test("a switched-on indicator button is coloured but stays fully clickable; off is plain", function()
+    local S = setup()
+    local panel = S.ChartPanel.Create(UIParent)
+    panel:SetItem(7)
+    local Button = S.UI.Button
+    local sma, bb = panel.toggleButtons.sma, panel.toggleButtons.bollinger
+
+    eq(Button.IsActive(sma), true, "SMA is on by default")
+    local glow = sma.selectedGlow.color
+    eq(glow[2] > glow[1] and glow[2] > glow[3], true, "green by default")
+    eq(sma.selectedGlow.shown, true)
+    for _, key in ipairs({ "Left", "Middle", "Right" }) do eq(sma[key].desaturated, true) end
+    local white = sma:GetFontString().textColor
+    eq(white[1] == 1 and white[2] == 1 and white[3] == 1, true, "white text on the colour")
+    -- unlike the selected scope, a switch keeps its hover, press and click behaviour so it can be turned off
+    eq(sma:GetHighlightTexture().alpha, nil, "hover effect untouched")
+    eq(sma.pushedTextOffset, nil, "press behaviour untouched")
+    eq(sma.clickButtons, nil, "click handling untouched")
+    eq(sma.enabled, true)
+
+    eq(Button.IsActive(bb), false, "Bollinger is off by default")
+    eq(bb.selectedGlow.shown, false, "no colour while off")
+    local gold = bb:GetFontString().textColor
+    eq(gold[1] == 1 and gold[2] == 0.82 and gold[3] == 0, true, "plain gold text while off")
+
+    Fake.fire(sma, "OnClick")
+    eq(Button.IsActive(sma), false, "clicking it switches it off")
+    eq(sma.selectedGlow.shown, false)
+    Fake.fire(bb, "OnClick")
+    eq(Button.IsActive(bb), true, "and the other one on")
+    Fake.uninstall()
+end)
+
+test("the hover glow of a switched-on button is a lighter shade of its colour, and back to stock when off", function()
+    local S = setup()
+    local panel = S.ChartPanel.Create(UIParent)
+    panel:SetItem(7)
+    local sma = panel.toggleButtons.sma
+    local hover = sma:GetHighlightTexture()
+    eq(hover.desaturated, true, "no yellow: the stock glow is made grey first")
+    local c = hover.vertexColor
+    eq(c[2] > c[1] and c[2] > c[3], true, "still green")
+    eq(c[1] > S.UI.Button.STYLES.green[1], true, "but lighter than the button colour")
+    Fake.fire(sma, "OnClick")
+    hover = sma:GetHighlightTexture()
+    eq(hover.desaturated, false, "stock yellow glow when off")
+    eq(hover.vertexColor[1] == 1 and hover.vertexColor[3] == 1, true)
+    Fake.uninstall()
+end)
+
+test("an indicator the view cannot draw is greyed, not coloured, even if switched on", function()
+    local S = setup()
+    local panel = S.ChartPanel.Create(UIParent)
+    panel:SetItem(8)
+    eq(panel.state.indicators.sma, true, "the player's choice is remembered")
+    eq(S.UI.Button.IsActive(panel.toggleButtons.sma), false, "but it is not shown as on")
+    eq(panel.toggleButtons.sma.selectedGlow.shown, false)
+    local grey = panel.toggleButtons.sma:GetFontString().textColor
+    eq(grey[1] == 0.5 and grey[2] == 0.5 and grey[3] == 0.5, true, "greyed text")
+    panel:SetItem(7)
+    eq(S.UI.Button.IsActive(panel.toggleButtons.sma), true, "back on once there is data")
+    Fake.uninstall()
+end)
+
 test("indicator buttons toggle overlays while the view has enough points", function()
     local S = setup()
     local panel = S.ChartPanel.Create(UIParent)

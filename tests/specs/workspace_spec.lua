@@ -242,8 +242,8 @@ test("an icon button draws its segments, highlights on hover and rejects unknown
     eq(b.lines[1].startPoint[1], "CENTER")
     eq(b.lines[5].endPoint[3], 5); eq(b.lines[5].endPoint[4], 5)
     local rest = b.lines[1].color
-    eq(rest[1] < 0.7 and rest[2] < 0.7 and rest[3] < 0.7, true, "dim grey at rest, not bright white")
-    eq(rest[4] < 1, true, "slightly transparent at rest")
+    eq(rest[1] > 0.8 and rest[2] > 0.8 and rest[3] > 0.8, true, "light grey at rest")
+    eq(rest[4], 1, "fully opaque at rest")
     local restCopy = { rest[1], rest[2], rest[3], rest[4] }
     Fake.fire(b, "OnEnter")
     eq(b.lines[1].color[1], 1); eq(b.lines[1].color[3], 0, "gold while hovered"); eq(b.lines[1].color[4], 1)
@@ -266,6 +266,48 @@ test("the pop-out button is rightmost in the chart header and the scope buttons 
     local without = S.ChartPanel.Create(UIParent)
     is_nil(without.popOutButton)
     eq(without.tfButtons["1M"].points[1][1], "TOPRIGHT", "no pop-out: the scope buttons take the corner")
+    Fake.uninstall()
+end)
+
+test("the tutorial ? button is coloured while tutorial mode is on, plain grey when off", function()
+    local S = setup()
+    S.PriceChart.Show(7)
+    local win = S.PriceChartWindow or nil
+    local help
+    for _, o in ipairs(Fake.objects) do
+        if o.kind == "Button" and o.text == "?" then help = o end
+    end
+    eq(help ~= nil, true, "the window has a ? button")
+    local Button = S.UI.Button
+
+    eq(Button.IsActive(help), true, "tutorial tips default to on")
+    local glow = help.selectedGlow.color
+    eq(glow[2] > glow[1] and glow[2] > glow[3], true, "green")
+    eq(help:GetFontString().textColor[1], 1, "white text while on")
+
+    S.Help.SetTutorial(false)
+    eq(Button.IsActive(help), false)
+    eq(help.selectedGlow.shown, false)
+    local grey = help:GetFontString().textColor
+    eq(grey[1] == 0.7 and grey[2] == 0.7 and grey[3] == 0.7, true, "a dim grey ? when off")
+    eq(help.enabled, true, "still clickable")
+
+    S.Help.SetTutorial(true)
+    eq(Button.IsActive(help), true, "back on")
+    Fake.uninstall()
+end)
+
+test("a selected button takes any style but keeps its mouse lock; an unknown style is an error", function()
+    local S = setup()
+    local btn = CreateFrame("Button", nil, UIParent, "UIPanelButtonTemplate")
+    S.UI.Button.SetSelected(btn, true, "green")
+    local c = btn.selectedGlow.color
+    eq(c[2] > c[1] and c[2] > c[3], true)
+    eq(#btn.clickButtons, 0, "selected still takes no clicks, whatever its colour")
+    S.UI.Button.SetSelected(btn, true)
+    c = btn.selectedGlow.color
+    eq(c[3] > c[1], true, "default selected colour is blue")
+    throws(function() S.UI.Button.SetSelected(btn, true, "pink") end, "unknown button style")
     Fake.uninstall()
 end)
 

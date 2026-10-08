@@ -87,20 +87,20 @@ function Window.Create(opts)
 
     -- Tutorial mode is one account-wide setting shared by every window and tooltip.
     local help = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
-    help:SetSize(23, 23)
-    help:SetPoint("RIGHT", close, "LEFT", -2, 0)
+    help:SetSize(24, 24)
+    help:SetPoint("RIGHT", close, "LEFT", -2, 1)
     help:SetText("?")
+    -- Bold, to stand up next to the close button's artwork: the outline thickens the strokes.
+    local face, size = help:GetFontString():GetFont()
+    help:GetFontString():SetFont(face or "Fonts\\FRIZQT__.TTF", (size or 12) + 2, "THICKOUTLINE")
     -- Sit above the draggable title bar, which spans the same strip and would otherwise take the click.
     help:SetFrameLevel(bar:GetFrameLevel() + 10)
     close:SetFrameLevel(bar:GetFrameLevel() + 10)
     help:RegisterForClicks("LeftButtonUp")
     local function paintHelp()
-        local fs = help:GetFontString()
-        if Stockist.Help.TutorialEnabled() then
-            fs:SetTextColor(0.3, 1, 0.5)
-        else
-            fs:SetTextColor(0.7, 0.7, 0.7)
-        end
+        local on = Stockist.Help.TutorialEnabled()
+        UI.Button.SetActive(help, on)
+        if not on then help:GetFontString():SetTextColor(0.7, 0.7, 0.7) end -- off: a dim grey "?"
     end
     help:SetScript("OnClick", function()
         Stockist.Help.SetTutorial(not Stockist.Help.TutorialEnabled())
@@ -129,5 +129,5 @@ function Window.Create(opts)
     if opts.name then tinsert(UISpecialFrames, opts.name) end -- Esc closes it
     frame:Hide()
 
-    return { frame = frame, content = content, title = title }
+    return { frame = frame, content = content, title = title, helpButton = help }
 end
