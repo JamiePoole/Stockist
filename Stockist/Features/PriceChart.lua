@@ -151,6 +151,31 @@ function PriceChart.BuildConfig(store, itemID, key, indicators, now, tzOffset)
     }
 end
 
+--- What to show for an item before any chart: { kind = "ok" } when there is data to chart, otherwise a
+--- message for the panel. `exists` is ItemInfo.Exists (true / false / nil for unknown), `lastScan` the
+--- time of the last completed scan or nil.
+---   notfound  no such item (a bad ID): a "404"
+---   nodata    a real item we have no price for (it was not on the Auction House, or no scan has run)
+function PriceChart.Status(store, itemID, exists, lastScan, now)
+    if exists == false then
+        return {
+            kind = "notfound",
+            text = ("No item has the ID %d. Check the number, or shift-click an item into the command."):format(itemID),
+        }
+    end
+    if not store:Latest(itemID) then
+        if lastScan then
+            return {
+                kind = "nodata",
+                text = ("No prices recorded for this item. It wasn't on the Auction House at the last scan (%s). "
+                    .. "Items that are soulbound or only sold by vendors never appear there."):format(Format.Age(now - lastScan)),
+            }
+        end
+        return { kind = "nodata", text = "No prices recorded yet. Open the Auction House to take the first scan." }
+    end
+    return { kind = "ok" }
+end
+
 --- The numbers the header shows: { price, min, change (24h percent), age (seconds) }; nil when the
 --- item has no reading.
 function PriceChart.HeaderParts(store, itemID, now)

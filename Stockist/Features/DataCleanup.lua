@@ -26,6 +26,7 @@ end
 local function track(arg)
     local id = Stockist.ParseItemID(arg)
     if not id then return say("usage: /stockist track <itemID or link>") end
+    if Stockist.ItemInfo.Exists(id) == false then return say(("no item has the ID %d, so there is nothing to track."):format(id)) end
     local name = Stockist.ItemName(id)
     if Stockist.tracked:Add(id) then
         say(("tracking %s: history kept %d days hourly, %d days daily."):format(name,

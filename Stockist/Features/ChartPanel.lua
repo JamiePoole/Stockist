@@ -63,7 +63,7 @@ function ChartPanel.Create(parent, opts)
     self.nameHit:SetPoint("TOPLEFT", self.nameText, "TOPLEFT")
     self.nameHit:EnableMouse(true)
     self.nameHit:SetScript("OnEnter", function(hit)
-        if self.state.itemID then showItemTooltip(hit, self.state.itemID) end
+        if self.state.itemID and self.statusKind ~= "notfound" then showItemTooltip(hit, self.state.itemID) end
     end)
     self.nameHit:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
@@ -124,6 +124,15 @@ function ChartPanel.Create(parent, opts)
     end
     self.legendKey = legendColumn("BOTTOMLEFT", 2, "BOTTOM", -10)
     self.legendTips = legendColumn("BOTTOM", 10, "BOTTOMRIGHT", -2)
+    -- Shown instead of the chart when there is nothing to chart (see PriceChart.Status).
+    self.message = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    self.message:SetPoint("LEFT", frame, "LEFT", 40, 0)
+    self.message:SetPoint("RIGHT", frame, "RIGHT", -40, 0)
+    self.message:SetJustifyH("CENTER")
+    self.message:SetWordWrap(true)
+    self.message:SetTextColor(0.7, 0.72, 0.78)
+    self.message:Hide()
+
     -- The legend's height depends on its width, so make room for it again whenever the panel resizes.
     frame:SetScript("OnSizeChanged", function() if self.state.itemID then self:LayoutChart() end end)
 
@@ -156,6 +165,7 @@ end
 
 --- Size the chart to leave room for the legend (tutorial mode) under it, whose height follows its text.
 function ChartPanel:LayoutChart()
+    if self.statusKind then return end -- a message is showing instead of the chart and legend
     local tutorial = Stockist.Help.TutorialEnabled()
     self.legendKey:SetShown(tutorial)
     self.legendTips:SetShown(tutorial)
@@ -171,11 +181,52 @@ function ChartPanel:LayoutChart()
     chartFrame:SetPoint("BOTTOMRIGHT", self.frame, "BOTTOMRIGHT", 0, tutorial and (legendHeight + LEGEND_GAP) or 0)
 end
 
+--- Replace the chart with a message: the item does not exist ("404"), or it exists but has no prices.
+function ChartPanel:ShowStatus(status)
+    local state = self.state
+    self.statusKind = status.kind
+    if status.kind == "notfound" then
+        self.nameText:SetText(Format.Colored("Item not found", 0.92, 0.3, 0.3))
+        self.metaText:SetText("")
+    else
+        self.nameText:SetText(Stockist.ItemInfo.ColoredName(state.itemID))
+        self.metaText:SetText("no data yet")
+    end
+    self.nameHit:SetSize(math.max(1, self.nameText:GetStringWidth()), math.max(1, self.nameText:GetStringHeight()))
+    self.priceText:SetText("")
+
+    local Tooltip = Stockist.UI.Tooltip
+    for _, btn in pairs(self.tfButtons) do Tooltip.SetAvailable(btn, false) end
+    for _, btn in pairs(self.toggleButtons) do
+        Tooltip.SetAvailable(btn, false)
+        paintToggle(btn, false, false)
+    end
+    self.available = {}
+
+    self.chart.frame:Hide()
+    self.legendKey:Hide()
+    self.legendTips:Hide()
+    self.message:SetText(status.text)
+    self.message:Show()
+end
+
+--- Go back to the normal chart after a message.
+function ChartPanel:HideStatus()
+    if not self.statusKind then return end
+    self.statusKind = nil
+    self.message:Hide()
+    self.chart.frame:Show()
+end
+
 --- Redraw everything from the current item, scope and indicators.
 function ChartPanel:Refresh()
     local state = self.state
     if not (state.itemID and Stockist.store) then return end
     local now = Stockist.Clock.now()
+    local lastScan = Stockist.db and Stockist.db.scan and Stockist.db.scan.last
+    local status = PriceChart.Status(Stockist.store, state.itemID, Stockist.ItemInfo.Exists(state.itemID), lastScan, now)
+    if status.kind ~= "ok" then return self:ShowStatus(status) end
+    self:HideStatus()
     local config = PriceChart.BuildConfig(Stockist.store, state.itemID, state.timeframe,
         state.indicators, now, Stockist.Clock.tzOffset())
     self.chart:SetConfig(config)

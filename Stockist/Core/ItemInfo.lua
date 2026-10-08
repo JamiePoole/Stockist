@@ -15,6 +15,16 @@ function ItemInfo.Name(id)
     return name
 end
 
+--- Does the game have an item with this ID? Works for items the client has not cached yet. Returns
+--- true or false, or nil when the client cannot say (so callers treat nil as "maybe").
+function ItemInfo.Exists(id)
+    if C_Item and C_Item.DoesItemExistByID then
+        local ok, exists = pcall(C_Item.DoesItemExistByID, id)
+        if ok then return exists and true or false end
+    end
+    return nil
+end
+
 --- Quality 0 (poor) .. 7, or nil if unknown.
 function ItemInfo.Quality(id)
     local q = C_Item and C_Item.GetItemQualityByID and C_Item.GetItemQualityByID(id)
