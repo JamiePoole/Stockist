@@ -37,6 +37,27 @@ All of these exist as functions: `ReplicateItems`, `GetNumReplicateItems`, `GetR
 Auctionator (installed in the same client) uses the same modern commodity AH. Its full scan is the
 model for `Market/AuctionScanner.lua`.
 
+## Crafting data (`C_TradeSkillUI`): usable
+
+Measured 2026-10-08 with `/stkprobe craft`, two professions opened.
+
+- Present: `GetAllRecipeIDs`, `GetRecipeInfo`, `GetRecipeSchematic`, `GetBaseProfessionInfo`, `GetChildProfessionInfo`, `IsTradeSkillReady`, `GetRecipeItemLink`. Missing: `GetRecipeNumItemsProduced`. The classic `GetTradeSkill*` globals do not exist.
+- Events as on mainline: `TRADE_SKILL_SHOW`, `TRADE_SKILL_LIST_UPDATE`, `TRADE_SKILL_DATA_SOURCE_CHANGED`. The data is only readable while a profession window is open.
+- 132 and 507 recipes were listed, including unlearned ones (`learned = true/false`).
+- A recipe's schematic gives `outputItemID` and reagents as `{ itemID, quantityRequired }`.
+- Not yet checked: items produced per craft, reagent slots with alternatives.
+
+## Own auctions: readable
+
+Measured with `/stkprobe owned` at the Auction House with three buyout listings.
+
+- Present: `QueryOwnedAuctions`, `GetNumOwnedAuctions`, `GetOwnedAuctionInfo`, `GetCancelCost`, `CanCancelAuction`, `CalculateCommodityDeposit`, `CalculateItemDeposit`, `IsThrottledMessageSystemReady`, `GetAvailablePostCount`. Missing: `GetMaxOwnedAuctionCount`, `GetAuctionHouseFee`, `GetAuctionDuration` (so the sale cut is not exposed by an API).
+- Events: `OWNED_AUCTIONS_UPDATED`, `AUCTION_HOUSE_THROTTLED_SYSTEM_READY`.
+- A listing gives `auctionID`, `itemKey.itemID`, `quantity`, `buyoutAmount`, `status`, `timeLeftSeconds` (exact seconds) and sometimes `itemLink`.
+- `GetCancelCost` returned 0 for all three buyout listings. Auctionator warns "Someone has bid on this auction so cancelling will cost you your deposit and:" before cancelling a listing with a bid, which suggests the cost only applies when there is a bid. Whether a cancel returns the deposit is untested (`/stkprobe cancelwatch`).
+- Deposit for one unit at durations 1/2/3 was e.g. 3/12/36, 16/64/192, 23/92/276 copper: proportional 1 : 4 : 12, matching Classic's 2-hour, 8-hour and 24-hour auctions. `timeLeftSeconds` of 28,784 is 8 hours minus 16 seconds.
+- The AH cut is not exposed; read it from a sale invoice with `/stkprobe mailcut`.
+
 ## Decisions
 
 - Primary transport: a shared hidden custom channel carrying addon messages. Fallback: guild.
