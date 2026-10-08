@@ -269,7 +269,7 @@ test("the pop-out button is rightmost in the chart header and the scope buttons 
     Fake.uninstall()
 end)
 
-test("the tutorial ? button is coloured while tutorial mode is on, plain grey when off, and follows the style", function()
+test("the tutorial ? button is coloured while tutorial mode is on, plain grey when off", function()
     local S = setup()
     S.PriceChart.Show(7)
     local win = S.PriceChartWindow or nil
@@ -293,9 +293,7 @@ test("the tutorial ? button is coloured while tutorial mode is on, plain grey wh
     eq(help.enabled, true, "still clickable")
 
     S.Help.SetTutorial(true)
-    Button.SetToggleStyle("gold")
-    local c = help.selectedGlow.color
-    eq(c[1] > c[3], true, "follows the chosen style")
+    eq(Button.IsActive(help), true, "back on")
     Fake.uninstall()
 end)
 

@@ -27,9 +27,7 @@ UI.Button = Button
 Button.STYLES = {
     blue = { 0.10, 0.36, 0.85 },
     green = { 0.12, 0.72, 0.28 },
-    gold = { 0.88, 0.64, 0.06 },
 }
-Button.STYLE_NAMES = { "blue", "green", "gold" }
 local GLOW_ALPHA = 0.65
 local HOVER_LIGHTEN = 0.55             -- how far the hover glow moves from the colour towards white
 local INSET_X, INSET_Y = 4, 3         -- the layers stay inside the border
@@ -160,23 +158,10 @@ end
 function Button.SetActive(btn, on, style)
     on = on and true or false
     btn.stockistActive = on
-    applyLook(btn, on, style or Button.ToggleStyle())
+    applyLook(btn, on, style or "green") -- green is the colour of "on"
 end
 
 function Button.IsActive(btn)
     return btn.stockistActive == true
 end
 
---- The colour used for switches (SMA, Bollinger, tutorial). A player setting, so it can be tried live with
---- /stockist togglestyle; the default is green, the usual colour for "on".
-function Button.ToggleStyle()
-    local s = Stockist.settings and Stockist.settings.toggleStyle
-    return Button.STYLES[s] and s or "green"
-end
-
-function Button.SetToggleStyle(style)
-    if not Button.STYLES[style] then return false end
-    Stockist.settings.toggleStyle = style
-    Stockist.Events:Fire("TOGGLE_STYLE_CHANGED", style)
-    return true
-end

@@ -111,19 +111,6 @@ local function auto(arg)
         .. " (scans when the Auction House opens and every 15 minutes while it stays open).")
 end
 
--- Temporary, for trying colours live: /stockist togglestyle green|gold|blue
-local function toggleStyle(arg)
-    local Button = Stockist.UI.Button
-    arg = arg:lower()
-    if arg == "" then
-        return say("toggle buttons are " .. Button.ToggleStyle() .. ". Try: " .. table.concat(Button.STYLE_NAMES, ", ") .. ".")
-    end
-    if not Button.SetToggleStyle(arg) then
-        return say("usage: /stockist togglestyle " .. table.concat(Button.STYLE_NAMES, "|"))
-    end
-    say("toggle buttons are now " .. arg .. ".")
-end
-
 local function tutorial(arg)
     arg = arg:lower()
     if arg == "on" then
@@ -181,7 +168,6 @@ C:Register("chart", { help = "chart [id|link]     open the price window", run = 
 C:Register("movers", { help = "movers              biggest 24h risers and fallers", run = movers })
 C:Register("auto", { help = "auto [on|off]       re-scan while the Auction House is open", run = auto })
 C:Register("tutorial", { help = "tutorial [on|off]   long explanations in tooltips and the chart legend", run = tutorial })
-C:Register("togglestyle", { help = "togglestyle [colour]  try a colour for the on/off buttons (temporary)", run = toggleStyle })
 C:Register("time", { help = "time                print the game's clocks next to stored scan times (debugging)", run = timeinfo })
 
 -- Report scan outcomes.

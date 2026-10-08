@@ -105,7 +105,6 @@ function Window.Create(opts)
     end)
     UI.Tooltip.Attach(help, "tutorial")
     Stockist.Events:On("TUTORIAL_CHANGED", paintHelp)
-    Stockist.Events:On("TOGGLE_STYLE_CHANGED", paintHelp)
     paintHelp()
 
     local content = CreateFrame("Frame", nil, frame)

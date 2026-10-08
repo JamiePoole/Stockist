@@ -169,9 +169,6 @@ function ChartPanel.Create(parent, opts)
         if frame:IsVisible() then self:Refresh() end
     end, self)
 
-    Stockist.Events:On("TOGGLE_STYLE_CHANGED", function()
-        if frame:IsVisible() then self:Refresh() end
-    end, self)
     Stockist.Events:On("LINK_SELECTED", function(group, itemID)
         if self.link and group == self.link and itemID ~= self.state.itemID then self:SetItem(itemID) end
     end, self)

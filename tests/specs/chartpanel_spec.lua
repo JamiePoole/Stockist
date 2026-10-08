@@ -267,9 +267,6 @@ test("the hover glow of a switched-on button is a lighter shade of its colour, a
     local c = hover.vertexColor
     eq(c[2] > c[1] and c[2] > c[3], true, "still green")
     eq(c[1] > S.UI.Button.STYLES.green[1], true, "but lighter than the button colour")
-    S.UI.Button.SetToggleStyle("gold")
-    c = sma:GetHighlightTexture().vertexColor
-    eq(c[1] > c[3], true, "follows the colour")
     Fake.fire(sma, "OnClick")
     hover = sma:GetHighlightTexture()
     eq(hover.desaturated, false, "stock yellow glow when off")
@@ -288,29 +285,6 @@ test("an indicator the view cannot draw is greyed, not coloured, even if switche
     eq(grey[1] == 0.5 and grey[2] == 0.5 and grey[3] == 0.5, true, "greyed text")
     panel:SetItem(7)
     eq(S.UI.Button.IsActive(panel.toggleButtons.sma), true, "back on once there is data")
-    Fake.uninstall()
-end)
-
-test("the colour of the switches can be changed live, and an unknown colour is refused", function()
-    local S = setup()
-    local panel = S.ChartPanel.Create(UIParent)
-    panel:SetItem(7)
-    local sma = panel.toggleButtons.sma
-    eq(S.UI.Button.ToggleStyle(), "green", "green is the default")
-
-    eq(S.UI.Button.SetToggleStyle("gold"), true)
-    eq(S.settings.toggleStyle, "gold", "remembered")
-    local c = sma.selectedGlow.color
-    eq(c[1] > c[3] and c[2] > c[3], true, "gold: red and green high, blue low")
-
-    eq(S.UI.Button.SetToggleStyle("blue"), true)
-    c = sma.selectedGlow.color
-    eq(c[3] > c[1], true, "blue")
-
-    eq(S.UI.Button.SetToggleStyle("pink"), false)
-    eq(S.UI.Button.ToggleStyle(), "blue", "unchanged")
-    S.settings.toggleStyle = "nonsense"
-    eq(S.UI.Button.ToggleStyle(), "green", "a bad saved value falls back to green")
     Fake.uninstall()
 end)
 
