@@ -1,0 +1,8 @@
+## Interface: 16001
+## Title: Stockist Probe
+## Notes: Dev-only capability probe. Tests which addon-message channels and Auction House APIs exist on this client.
+## Author: JamiePoole
+## Version: 0.1.0
+## SavedVariables: StockistProbeDB
+
+Probe.lua

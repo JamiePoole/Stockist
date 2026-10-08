@@ -1,0 +1,6 @@
+dist/
+*.zip
+.env
+.idea/
+.vscode/
+*.log

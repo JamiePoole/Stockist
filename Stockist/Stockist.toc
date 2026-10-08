@@ -1,0 +1,11 @@
+## Interface: 16001
+## Title: Stockist
+## Notes: A trading-terminal view of the Auction House: price history, tickers, watches and alerts.
+## Author: JamiePoole
+## Version: 0.1.0
+## SavedVariables: StockistDB
+## X-Website: https://github.com/JamiePoole/Stockist
+## X-Curse-Project-ID:
+
+Core\Version.lua
+Core\Bootstrap.lua
