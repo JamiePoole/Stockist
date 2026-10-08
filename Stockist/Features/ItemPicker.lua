@@ -315,6 +315,15 @@ local function build()
     end)
 
     -- Item links offered while the search box has the keyboard (shift-click in bags and so on) go into it.
+    -- Shift-clicking a stack in the bags normally splits it, unless a chat box is active to take the link.
+    -- The game does not know our box is taking it, so it opens the split dialog right after we insert the
+    -- link, and Enter would then pick up part of the stack. Close that dialog again (next frame, once it
+    -- has opened) so the link is all the click does.
+    local function dismissStackSplit()
+        local split = _G.StackSplitFrame
+        if split and split:IsShown() then split:Hide() end
+    end
+
     -- The game may route one click through both names below; the same link in the same instant is one insert.
     local lastLink, lastTime
     local function insertLink(link)
@@ -324,6 +333,8 @@ local function build()
             if link == lastLink and now == lastTime then return end
             lastLink, lastTime = link, now
             edit:Insert(link)
+            dismissStackSplit()
+            if C_Timer then C_Timer.After(0, dismissStackSplit) end
         end
     end
     if hooksecurefunc then

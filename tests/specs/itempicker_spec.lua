@@ -615,3 +615,24 @@ test("backspacing the title-bar text to nothing leaves it empty while still in u
     eq(search.placeholder.shown, true)
     Fake.uninstall()
 end)
+
+test("shift-clicking a stack into the box does not leave the stack-split dialog open", function()
+    local hooks = {}
+    hooksecurefunc = function(name, fn) hooks[name] = fn end
+    ChatEdit_InsertLink = function() return false end
+    local S = setup()
+    S.ItemPicker.Show(anchor(), function() end)
+    local ui = S.ItemPicker._debug()
+    ui.edit.HasFocus = function() return true end
+    ui.edit.Insert = function(self, text) self.text = (self.text or "") .. text end
+    local split = Fake.new("Frame")
+    StackSplitFrame = split
+    split:Show()
+    hooks.ChatEdit_InsertLink("|cff1eff00|Hitem:7::::|h[Linen Cloth]|h|r")
+    eq(split.shown, false, "closed at once if it is already up")
+    split:Show() -- the bag opens it a moment after our hook ran
+    Fake.flush()
+    eq(split.shown, false, "and closed again on the next frame")
+    StackSplitFrame, hooksecurefunc, ChatEdit_InsertLink = nil, nil, nil
+    Fake.uninstall()
+end)
