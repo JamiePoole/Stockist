@@ -38,12 +38,15 @@ local function showItemTooltip(owner, itemID)
 end
 
 --- Create a chart panel filling `parent`. `opts` (optional): itemID, timeframe ("1D"/"1W"/"1M"),
---- indicators ({ sma = bool, bollinger = bool }).
+--- indicators ({ sma = bool, bollinger = bool }), link (a link group name: the panel then follows
+--- that group's selected item, see Core/Link.lua), popOut (add a "Pop out" button that opens the
+--- item in its own window).
 function ChartPanel.Create(parent, opts)
     opts = opts or {}
     local self = setmetatable({
+        link = opts.link,
         state = {
-            itemID = opts.itemID,
+            itemID = opts.itemID or Stockist.Link.Get(opts.link),
             timeframe = opts.timeframe or "1D",
             indicators = opts.indicators or { sma = true, bollinger = false },
         },
@@ -106,6 +109,13 @@ function ChartPanel.Create(parent, opts)
         prev = b
     end
 
+    if opts.popOut then
+        local pop = button(frame, "Pop out", 62, "popout")
+        pop:SetPoint("RIGHT", prev, "LEFT", -10, 0)
+        pop:SetScript("OnClick", function() self:PopOut() end)
+        self.popOutButton = pop
+    end
+
     self.chart = Stockist.Charts.Create(frame, { series = {} })
 
     -- Legend: the key on the left, "what to look for" (blue) on the right. The text carries its own
@@ -153,8 +163,17 @@ function ChartPanel.Create(parent, opts)
         if frame:IsVisible() then self:Refresh() end
     end, self)
 
-    if self.state.itemID then self:Refresh() end
+    Stockist.Events:On("LINK_SELECTED", function(group, itemID)
+        if self.link and group == self.link and itemID ~= self.state.itemID then self:SetItem(itemID) end
+    end, self)
+
+    self:Refresh()
     return self
+end
+
+--- Open this panel's item in its own window (the panel stays where it is).
+function ChartPanel:PopOut()
+    if self.state.itemID then Stockist.PriceChart.Show(self.state.itemID) end
 end
 
 function ChartPanel:SetItem(itemID)
@@ -191,6 +210,9 @@ function ChartPanel:ShowStatus(status)
     if status.kind == "notfound" then
         self.nameText:SetText(Format.Colored("Item not found", 0.92, 0.3, 0.3))
         self.metaText:SetText("")
+    elseif status.kind == "noitem" then
+        self.nameText:SetText("")
+        self.metaText:SetText("")
     else
         self.nameText:SetText(Stockist.ItemInfo.ColoredName(state.itemID))
         self.metaText:SetText("no data yet")
@@ -224,7 +246,13 @@ end
 --- Redraw everything from the current item, scope and indicators.
 function ChartPanel:Refresh()
     local state = self.state
-    if not (state.itemID and Stockist.store) then return end
+    if not Stockist.store then return end
+    if not state.itemID then
+        return self:ShowStatus({
+            kind = "noitem",
+            text = "No item selected. Pick one from the watchlist, or open one with /stockist workspace <item>.",
+        })
+    end
     local now = Stockist.Clock.now()
     local lastScan = Stockist.db and Stockist.db.scan and Stockist.db.scan.last
     local status = PriceChart.Status(Stockist.store, state.itemID, Stockist.ItemInfo.Exists(state.itemID), lastScan, now)

@@ -4,7 +4,7 @@ local DAY, HOUR = 86400, 3600
 local NOON = 40 * DAY + 12 * HOUR
 
 local FILES = {
-    "Core/Clock.lua", "Core/EventBus.lua", "Core/Registry.lua", "Core/Panels.lua", "Core/Format.lua",
+    "Core/Clock.lua", "Core/EventBus.lua", "Core/Registry.lua", "Core/Panels.lua", "Core/Link.lua", "Core/Format.lua",
     "Core/Calendar.lua", "Core/ItemInfo.lua", "Core/Help.lua", "Core/HelpTopics.lua", "Data/Rollup.lua",
     "Data/Indicators.lua", "Data/ReadingStore.lua", "UI/Charts/Charts.lua", "UI/Charts/Util.lua",
     "UI/Charts/Scale.lua", "UI/Charts/Formatters.lua", "UI/Charts/Theme.lua", "UI/Charts/Series/Line.lua",
@@ -168,9 +168,10 @@ test("a resize re-lays out the chart for the legend", function()
     local S = setup()
     local panel = S.ChartPanel.Create(UIParent)
     panel:SetItem(7)
-    local before = #panel.chart.frame.calls
+    local before = panel.chart.frame.points
     Fake.fire(panel.frame, "OnSizeChanged")
-    eq(#panel.chart.frame.calls > before, true, "the chart was re-anchored")
+    eq(panel.chart.frame.points ~= before, true, "the chart was cleared and re-anchored")
+    eq(#panel.chart.frame.points, 2, "top-left and bottom-right")
     Fake.uninstall()
 end)
 

@@ -13,4 +13,5 @@
 - `/stockist` commands are now a registry (`Stockist.Commands`), so features add their own.
 - The price chart is now a reusable panel (`ChartPanel`) with its own state, registered in a panel registry; the price window hosts one. A stand-in WoW frame layer lets the window code be tested.
 - The chart window shows "Item not found" for an ID no item has, and explains a real item with no prices; `/stockist chart|item|track` reject bad IDs instead of guessing.
+- `/stockist workspace [item]`: the first version of the trader workspace, one window holding panels in a layout (a watchlist placeholder and a price chart), with link groups so linked panels follow the same item, and a "Pop out" button on the chart.
 - Unit tests under Lua 5.1 (`scripts/test.ps1`).
