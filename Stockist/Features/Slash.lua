@@ -16,6 +16,24 @@ end
 local function parseItemID(text)
     return tonumber(text) or tonumber((text or ""):match("item:(%d+)"))
 end
+Stockist.ItemName = itemName
+Stockist.ParseItemID = parseItemID
+
+-- With no argument, chart the item we hold the most history for.
+local function richestItem()
+    local best, bestCount = nil, -1
+    for _, id in ipairs(Stockist.store:Items()) do
+        local count = #Stockist.store:GetCandles(id, "hourly")
+        if count > bestCount then best, bestCount = id, count end
+    end
+    return best
+end
+
+local function chart(arg)
+    local id = arg ~= "" and parseItemID(arg) or richestItem()
+    if not id then return say("no data yet. Open the Auction House to take a reading, or give an item ID.") end
+    Stockist.PriceChart.Show(id)
+end
 
 local function status()
     local store = Stockist.store
@@ -72,6 +90,7 @@ local commands = {
     end,
     item = item,
     movers = movers,
+    chart = chart,
     auto = function(arg)
         arg = arg:lower()
         if arg == "on" then
@@ -96,7 +115,7 @@ SlashCmdList["STOCKIST"] = function(input)
     if fn then
         fn(rest)
     else
-        say("commands: status, scan, item <id>, movers, auto [on|off]")
+        say("commands: status, scan, item <id>, chart [id], movers, auto [on|off]")
     end
 end
 
