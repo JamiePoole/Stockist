@@ -533,3 +533,30 @@ test("resizing the panel re-fits the header", function()
     eq(panel.metaText.text:find("updated", 1, true) ~= nil, true, "everything returns when there is room")
     Fake.uninstall()
 end)
+
+test("the moving average and the Bollinger bands are drawn in different colours, whatever else is on the chart", function()
+    local S = setup()
+    local panel = S.ChartPanel.Create(UIParent, { indicators = { sma = true, bollinger = true } })
+    panel:SetItem(7)
+    local model = S.Charts.Build(panel.chart.config, 600, 300)
+    local colours = {}
+    for _, pane in ipairs(model.panes) do
+        for _, e in ipairs(pane.entries) do
+            if e.spec.label then colours[e.spec.label] = e.color end
+        end
+    end
+    local sma, upper, lower = colours["SMA 7"], colours["upper band"], colours["lower band"]
+    eq(sma ~= nil and upper ~= nil and lower ~= nil, true, "all three lines are drawn")
+    eq(sma[1], S.PriceChart.SMA_COLOR[1]); eq(sma[3], S.PriceChart.SMA_COLOR[3])
+    eq(upper[1], S.PriceChart.BOLLINGER_COLOR[1]); eq(upper[3], S.PriceChart.BOLLINGER_COLOR[3])
+    eq(upper[3] ~= sma[3], true, "amber average, purple bands")
+    eq(lower[3], upper[3], "both bands share a colour")
+    -- order of the other series must not change them: only bollinger on gives the same band colour
+    panel.state.indicators.sma = false
+    panel:Refresh()
+    model = S.Charts.Build(panel.chart.config, 600, 300)
+    local only
+    for _, e in ipairs(model.panes[1].entries) do if e.spec.label == "upper band" then only = e.color end end
+    eq(only[3], upper[3])
+    Fake.uninstall()
+end)

@@ -22,6 +22,12 @@ local TIMEFRAMES = {
 -- period + 1. The periods are modest because Auction House history is sparse (the textbook Bollinger
 -- period of 20 would rarely be available).
 local SMA_PERIOD, BOLLINGER_PERIOD, BOLLINGER_K = 7, 10, 2
+-- Fixed colours for the indicators, so they never depend on how many series came before them: amber for the
+-- moving average (the trend line), purple for the Bollinger bands (the envelope). Both stand apart from the
+-- green / red candles and from each other.
+local SMA_COLOR = { 1.00, 0.78, 0.25, 1 }
+local BOLLINGER_COLOR = { 0.75, 0.50, 1.00, 0.85 }
+PriceChart.SMA_COLOR, PriceChart.BOLLINGER_COLOR = SMA_COLOR, BOLLINGER_COLOR
 local FORWARD_MARGIN = 0.03 -- empty space after "now", as a fraction of the window
 local MIN_POINTS = 3
 local RESOLUTION = { ticks = 60, hourly = 3600, daily = 86400 }
@@ -122,10 +128,10 @@ function PriceChart.BuildConfig(store, itemID, key, indicators, now, tzOffset)
     local overlays = {}
     indicators = indicators or {}
     if indicators.sma and available.sma.ok then
-        overlays[#overlays + 1] = { type = "sma", of = "price", period = SMA_PERIOD }
+        overlays[#overlays + 1] = { type = "sma", of = "price", period = SMA_PERIOD, color = SMA_COLOR }
     end
     if indicators.bollinger and available.bollinger.ok then
-        overlays[#overlays + 1] = { type = "bollinger", of = "price", period = BOLLINGER_PERIOD, k = BOLLINGER_K }
+        overlays[#overlays + 1] = { type = "bollinger", of = "price", period = BOLLINGER_PERIOD, k = BOLLINGER_K, color = BOLLINGER_COLOR }
     end
     local note = #notes > 0 and table.concat(notes, ". ") or nil
 
