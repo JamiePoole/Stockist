@@ -93,6 +93,35 @@ end)
 
 -- Formatters -----------------------------------------------------------------------------------
 
+test("daily data is labelled with dates only, never a time of day", function()
+    local C = ns().Charts
+    local time = C.formatters:Require("time")
+    local t = 1791417600 -- midnight UTC, i.e. 10:00 in UTC+10
+    local daily = { span = 2 * 86400, resolution = 86400 }
+    eq(time(t, daily):find(":", 1, true), nil, "axis label")
+    eq(time(t, { span = 2 * 86400, resolution = 86400, long = true }):find(":", 1, true), nil, "tooltip label")
+    eq(time(t, { span = 3600, resolution = 60 }):find(":", 1, true) ~= nil, true, "fine data keeps the clock time")
+    eq(time(t, { span = 3600, resolution = 3600, long = true }):find(":", 1, true) ~= nil, true)
+end)
+
+test("daily charts put their ticks on UTC midnights, whatever the timezone", function()
+    local C = ns().Charts
+    local day = 86400
+    local model = C.Build({
+        x = { format = "time", resolution = day, tzOffset = 10 * 3600 },
+        series = { { type = "line", points = { { x = 100 * day, y = 1 }, { x = 105 * day, y = 2 } } } },
+    }, 600, 200)
+    local canvas = new_recording_canvas()
+    C.Draw(model, canvas)
+    -- every vertical grid line (x constant) must be at a UTC midnight
+    local verticals = canvas:find("line", function(o) return o.x1 == o.x2 end)
+    eq(#verticals > 2, true)
+    for _, l in ipairs(verticals) do
+        local v = model.xs:Invert(l.x1)
+        if v >= 100 * day - 1 then eq(math.abs(v / day - math.floor(v / day + 0.5)) < 1e-6, true) end
+    end
+end)
+
 test("money, number and int formatters", function()
     local C = ns().Charts
     local money = C.formatters:Require("money")

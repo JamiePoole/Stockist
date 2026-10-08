@@ -38,7 +38,9 @@ function PriceChart.BuildConfig(store, itemID, key, indicators, now, tzOffset)
 
     local pricePane, supply = nil, {}
     local ticks = tf.ticks and store:Ticks(itemID, fromTs) or {}
+    local resolution = (tf.res == "daily") and 86400 or 3600
     if #ticks > 0 then
+        resolution = 60
         local line = {}
         for i, t in ipairs(ticks) do
             line[i] = { x = t.x, y = t.y }
@@ -60,7 +62,7 @@ function PriceChart.BuildConfig(store, itemID, key, indicators, now, tzOffset)
     if indicators.bollinger then overlays[#overlays + 1] = { type = "bollinger", of = "price", period = 10, k = 2 } end
 
     return {
-        x = { format = "time", tzOffset = tzOffset or 0 },
+        x = { format = "time", tzOffset = tzOffset or 0, resolution = resolution },
         emptyText = "No readings in this range yet",
         panes = {
             {
