@@ -182,4 +182,7 @@ function Fake.uninstall()
         "CreateFrame", "C_Timer", "StockistChartWindow" }) do
         _G[name] = nil
     end
+    for name in pairs(_G) do
+        if type(name) == "string" and name:find("^StockistPopout_") then _G[name] = nil end
+    end
 end

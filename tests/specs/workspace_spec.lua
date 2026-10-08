@@ -10,7 +10,7 @@ local FILES = {
     "UI/Charts/Charts.lua", "UI/Charts/Util.lua", "UI/Charts/Scale.lua", "UI/Charts/Formatters.lua",
     "UI/Charts/Theme.lua", "UI/Charts/Series/Line.lua", "UI/Charts/Series/Candle.lua", "UI/Charts/Series/Bar.lua",
     "UI/Charts/Overlays/Overlays.lua", "UI/Charts/Core.lua", "UI/Charts/FrameCanvas.lua", "UI/Charts/ChartFrame.lua",
-    "UI/Kit/Tooltip.lua", "UI/Kit/Button.lua", "UI/Kit/IconButton.lua", "UI/Kit/Window.lua", "Features/PriceChart.lua", "Features/ItemPicker.lua", "Features/ChartPanel.lua",
+    "UI/Kit/Tooltip.lua", "UI/Kit/Button.lua", "UI/Kit/IconButton.lua", "UI/Kit/Window.lua", "Features/PopOut.lua", "Features/PriceChart.lua", "Features/ItemPicker.lua", "Features/ChartPanel.lua",
     "Features/Workspace.lua",
 }
 
@@ -158,9 +158,9 @@ test("a chart in the workspace follows the link group and can pop out", function
     eq(panel:GetItem(), 8)
 
     local popped
-    S.PriceChart.Show = function(id) popped = id end
+    S.PopOut.Open = function(kind, opts) popped = { kind, opts } end
     Fake.fire(panel.popOutButton, "OnClick")
-    eq(popped, 8, "pop out opens the current item in its own window")
+    eq(popped[1], "chart"); eq(popped[2].itemID, 8, "pop out opens the current item in its own window")
     Fake.uninstall()
 end)
 
@@ -325,7 +325,8 @@ test("windows are top-level and raise themselves when shown, so a pop-out sits o
     for _, name in ipairs({ "StockistWorkspace", "StockistChartWindow" }) do
         local win = _G[name]
         eq(Fake.called(win, "SetToplevel"), true, name .. " is top-level")
-        eq(Fake.called(win, "Raise"), false, "nothing raised yet in the stand-in client")
+        -- the pop-out is also raised explicitly by PopOut.Open; the workspace only by its OnShow
+        eq(Fake.called(win, "Raise"), name == "StockistChartWindow", name)
         Fake.fire(win, "OnShow")
         eq(Fake.called(win, "Raise"), true, name .. " raises itself when shown")
     end
@@ -355,8 +356,9 @@ test("title bar: a 30px bar, 24px controls centred in it, and the same padding a
 
     local bar = win.title.parent
     eq(bar.size[2], 30)
-    local tp = lastPoint(win.title)
-    eq(tp[1], "LEFT"); eq(tp[2], bar); eq(tp[4], 8, "title: padding from the left edge"); eq(tp[5], 0, "centred vertically")
+    local tp
+    for _, pt in ipairs(win.title.points) do if pt[1] == "LEFT" then tp = pt end end
+    eq(tp[2], bar); eq(tp[4], 8, "title: padding from the left edge"); eq(tp[5], 0, "centred vertically")
 
     local closeBtn
     for _, o in ipairs(Fake.objects) do if o.kind == "Button" and o.parent == win.frame and o.size and o.size[1] == 24 and o ~= win.helpButton and o.points and o.points[1][1] == "RIGHT" and o.points[1][2] == bar then closeBtn = o end end

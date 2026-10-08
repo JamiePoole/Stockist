@@ -23,7 +23,7 @@ R("bollinger", "Bollinger bands (BB 10)", "A channel around the 10-candle averag
     .. "line can mean unusually cheap (a possible buy); touching the upper line, unusually "
     .. "expensive (a possible sell). Narrow bands mean a calm market; wide bands, a volatile one.")
 
-R("popout", "Pop out", "Opens this chart in its own window.",
+R("popout", "Pop out", "Opens this panel in its own window.",
     "The chart stays here too. A popped-out window is handy when you want to keep one item in view while "
     .. "you look at something else.")
 

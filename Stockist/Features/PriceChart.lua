@@ -220,31 +220,16 @@ function PriceChart.MetaChoices(parts)
 end
 
 ---------------------------------------------------------------------------------------------------
--- Window (game only): the chart panel (Features/ChartPanel.lua) in its own movable window
+-- Window (game only): the chart panel (Features/ChartPanel.lua) in a pop-out window (Features/PopOut.lua)
 ---------------------------------------------------------------------------------------------------
 
-local win, panel
+--- The chart pop-out's panel (nil until it has been opened once).
+function PriceChart.PopOutPanel()
+    local slot = Stockist.PopOut.Slot("chart")
+    return slot and slot.panel or nil
+end
 
---- The pop-out window's chart panel (nil until it has been opened once).
-function PriceChart.PopOutPanel() return panel end
-
---- Open the price window for an item.
+--- Open the chart pop-out (the window /stockist chart uses) for an item.
 function PriceChart.Show(itemID)
-    if not win then
-        win = Stockist.UI.Window.Create({
-            name = "StockistChartWindow", title = "Stockist", width = 680, height = 520, minWidth = 520, minHeight = 420,
-        })
-        panel = Stockist.ChartPanel.Create(win.content)
-        -- An item dropped anywhere on the pop-out (the window, its title bar) changes this chart only: the panel
-        -- is not in a link group, so the workspace's selection is left alone.
-        local function drop(itemID) panel:Pick(itemID) end
-        Stockist.ItemPicker.AcceptDrops(win.frame, drop)
-        Stockist.ItemPicker.AcceptDrops(win.bar, drop)
-    end
-    panel:SetItem(itemID)
-    win.frame:Show()
-    -- The legend's text height is only known once it has a width, i.e. after the first layout pass.
-    C_Timer.After(0, function()
-        if win.frame:IsShown() then panel:LayoutChart() end
-    end)
+    Stockist.PopOut.Open("chart", { itemID = itemID })
 end

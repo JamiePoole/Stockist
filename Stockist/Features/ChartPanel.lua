@@ -193,6 +193,15 @@ function ChartPanel.Create(parent, opts)
         if self.state.itemID then self:LayoutChart() end
     end)
 
+    -- A panel that is not on screen skips redrawing, but remembers it missed something (a name that arrived,
+    -- a scan) and catches up the moment it is shown again.
+    local function refreshIfVisible()
+        if frame:IsVisible() then self:Refresh() else self.stale = true end
+    end
+    frame:HookScript("OnShow", function()
+        if self.stale then self.stale = false; self:Refresh() end
+    end)
+
     -- Item names arrive from the server a moment after the first request.
     -- A load that fails means the item does not exist, which turns the panel into "Item not found".
     local loader = CreateFrame("Frame")
@@ -200,15 +209,11 @@ function ChartPanel.Create(parent, opts)
     loader:RegisterEvent("ITEM_DATA_LOAD_RESULT")
     loader:SetScript("OnEvent", function(_, event, itemID, success)
         if event == "ITEM_DATA_LOAD_RESULT" then Stockist.ItemInfo.NoteLoadResult(itemID, success) end
-        if frame:IsVisible() and itemID == self.state.itemID then self:Refresh() end
+        if itemID == self.state.itemID then refreshIfVisible() end
     end)
 
-    Stockist.Events:On("SCAN_COMPLETE", function()
-        if frame:IsVisible() then self:Refresh() end
-    end, self)
-    Stockist.Events:On("TUTORIAL_CHANGED", function()
-        if frame:IsVisible() then self:Refresh() end
-    end, self)
+    Stockist.Events:On("SCAN_COMPLETE", refreshIfVisible, self)
+    Stockist.Events:On("TUTORIAL_CHANGED", refreshIfVisible, self)
 
     Stockist.Events:On("LINK_SELECTED", function(group, itemID)
         if self.link and group == self.link and itemID ~= self.state.itemID then self:SetItem(itemID) end
@@ -218,9 +223,35 @@ function ChartPanel.Create(parent, opts)
     return self
 end
 
---- Open this panel's item in its own window (the panel stays where it is).
+--- Open this panel's item in a window of its own (the panel stays where it is). The window starts with the same
+--- scope and indicators, then goes its own way: it is not linked to anything.
 function ChartPanel:PopOut()
-    if self.state.itemID then Stockist.PriceChart.Show(self.state.itemID) end
+    if not self.state.itemID then return end
+    Stockist.PopOut.Open("chart", {
+        itemID = self.state.itemID, timeframe = self.state.timeframe,
+        indicators = { sma = self.state.indicators.sma, bollinger = self.state.indicators.bollinger },
+    })
+end
+
+--- Take the options a pop-out window is opened with.
+function ChartPanel:Apply(opts)
+    if opts.timeframe then self.state.timeframe = opts.timeframe end
+    if opts.indicators then
+        self.state.indicators = { sma = opts.indicators.sma, bollinger = opts.indicators.bollinger }
+    end
+    self.link = opts.link
+    if opts.itemID then self:SetItem(opts.itemID) else self:Refresh() end
+end
+
+--- The window title for this panel: "Linen Cloth (Price chart)", or just "Price chart" with no item.
+function ChartPanel:Title()
+    local id = self.state.itemID
+    if not id then return "Price chart" end
+    return ("%s (Price chart)"):format(Stockist.ItemInfo.Name(id) or ("item:" .. id))
+end
+
+function ChartPanel:UpdateTitle()
+    if self.onTitle then self.onTitle(self:Title()) end
 end
 
 --- The player chose an item (from the picker): select it for the whole link group, or just here if unlinked.
@@ -354,6 +385,7 @@ function ChartPanel:ShowStatus(status)
     self.priceText:SetText("")
     self.scanText:SetText("")
     self:LayoutHeader()
+    self:UpdateTitle()
 
     local Tooltip = Stockist.UI.Tooltip
     for _, btn in pairs(self.tfButtons) do
@@ -408,6 +440,7 @@ function ChartPanel:Refresh()
     self.metaChoices = parts and PriceChart.MetaChoices(parts) or { "no data yet" }
     self.metaKeep = parts == nil
     self:LayoutHeader()
+    self:UpdateTitle()
 
     local Tooltip = Stockist.UI.Tooltip
     -- The active scope is shown as selected (blue), not disabled: it is simply the one in use.
@@ -434,4 +467,7 @@ function ChartPanel:Destroy()
     self.frame:Hide()
 end
 
-Stockist.Panels:Register("chart", { title = "Price chart", create = ChartPanel.Create })
+Stockist.Panels:Register("chart", {
+    title = "Price chart", create = ChartPanel.Create,
+    popout = { width = 680, height = 520, minWidth = 520, minHeight = 420 },
+})

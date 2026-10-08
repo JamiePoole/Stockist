@@ -151,6 +151,14 @@ function Watchlist.Create(parent, opts)
     self.title:SetPoint("TOPLEFT", 8, -5)
     self.title:SetText("Watchlist")
 
+    if opts.popOut then
+        local pop = Stockist.UI.IconButton.Create(frame, { icon = "popout", width = 24, height = 20 })
+        pop:SetPoint("TOPRIGHT", -4, -2)
+        pop:SetScript("OnClick", function() self:PopOut() end)
+        Stockist.UI.Tooltip.Attach(pop, "popout")
+        self.popOutButton = pop
+    end
+
     self.list = CreateFrame("Frame", nil, frame)
     self.list:SetPoint("TOPLEFT", 0, -HEADER_HEIGHT)
     self.list:SetPoint("BOTTOMRIGHT", 0, FOOTER_HEIGHT)
@@ -179,7 +187,14 @@ function Watchlist.Create(parent, opts)
     self.trackButton:SetScript("OnClick", function() self:ToggleSelected() end)
     Stockist.UI.Tooltip.Attach(self.trackButton, "watchlist-track")
 
-    local function refresh() if frame:IsVisible() then self:Refresh() end end
+    -- A panel that is not on screen skips redrawing, but remembers it missed something (a name that arrived,
+    -- a scan) and catches up the moment it is shown again.
+    local function refresh()
+        if frame:IsVisible() then self:Refresh() else self.stale = true end
+    end
+    frame:HookScript("OnShow", function()
+        if self.stale then self.stale = false; self:Refresh() end
+    end)
     self.list:SetScript("OnSizeChanged", refresh) -- how many rows fit depends on the list height
     Stockist.Events:On("TRACKED_CHANGED", refresh, self)
     Stockist.Events:On("SCAN_COMPLETE", refresh, self)
@@ -208,6 +223,20 @@ function Watchlist:Drop(itemID)
     if Stockist.tracked:Add(itemID) then Stockist.Events:Fire("TRACKED_CHANGED", itemID, true) end
     self:Select(itemID)
 end
+
+--- Open the watchlist in a window of its own. It keeps this panel's link group, so choosing an item in it still
+--- drives the charts that follow that group.
+function Watchlist:PopOut()
+    Stockist.PopOut.Open("watchlist", { link = self.link })
+end
+
+--- Take the options a pop-out window is opened with.
+function Watchlist:Apply(opts)
+    self.link = opts.link
+    self:Refresh()
+end
+
+function Watchlist:Title() return "Watchlist" end
 
 function Watchlist:SetItem(itemID)
     -- The watchlist is where items are picked, so it only highlights the selection; Refresh reads it from the group.
@@ -285,4 +314,7 @@ function Watchlist:Destroy()
     self.frame:Hide()
 end
 
-Stockist.Panels:Register("watchlist", { title = "Watchlist", create = Watchlist.Create })
+Stockist.Panels:Register("watchlist", {
+    title = "Watchlist", create = Watchlist.Create,
+    popout = { width = 300, height = 440, minWidth = 230, minHeight = 160 },
+})
