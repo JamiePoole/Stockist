@@ -12,6 +12,7 @@ Core\Config.lua
 Core\Clock.lua
 Core\EventBus.lua
 Core\Registry.lua
+Core\Panels.lua
 Core\Format.lua
 Core\Commands.lua
 Core\Calendar.lua
@@ -40,6 +41,7 @@ UI\Charts\ChartFrame.lua
 UI\Kit\Tooltip.lua
 UI\Kit\Window.lua
 Features\PriceChart.lua
+Features\ChartPanel.lua
 Features\StatusCommands.lua
 Features\DataCleanup.lua
 Core\Bootstrap.lua

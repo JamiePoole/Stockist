@@ -57,7 +57,7 @@ PopOut                     hosts one panel in its own Window (UI/Kit/Window.lua)
 
 Steps that fall out of this:
 
-1. Split `Features/PriceChart.lua` into a reusable **chart panel** (header, scopes, indicators, chart, legend) and a thin window around it.
+1. ~~Split `Features/PriceChart.lua` into a reusable **chart panel** and a thin window around it.~~ Done: `Features/ChartPanel.lua` (`ChartPanel.Create(parent, opts)`, one object per panel with its own item, scope and indicators), registered as `Stockist.Panels:Get("chart")`; `PriceChart.Show` puts one in a window. `Features/PriceChart.lua` keeps the pure config logic.
 2. Panel registry and a workspace host with a fixed first layout.
 3. Link groups and the item picker (#6), both per panel.
 4. Saved layouts and pop-out.
