@@ -23,6 +23,21 @@ local function trackedMethods()
         IsEnabled = function(self) return self.enabled end,
         SetAlpha = function(self, a) self.alpha = a end,
         SetColorTexture = function(self, r, g, b, a) self.color = { r, g, b, a } end,
+        SetTextColor = function(self, r, g, b, a) self.textColor = { r, g, b, a } end,
+        SetDesaturated = function(self, v) self.desaturated = v and true or false end,
+        SetBlendMode = function(self, mode) self.blendMode = mode end,
+        SetGradient = function(self, orientation, from, to) self.gradient = { orientation, from, to } end,
+        SetWidth = function(self, w) self.size = { w, self.size and self.size[2] } end,
+        SetHeight = function(self, h) self.size = { self.size and self.size[1], h } end,
+        SetVertexColor = function(self, r, g, b, a) self.vertexColor = { r, g, b, a } end,
+        GetObjectType = function(self) return self.kind end,
+        RegisterForClicks = function(self, ...) self.clickButtons = { ... } end,
+        SetPushedTextOffset = function(self, x, y) self.pushedTextOffset = { x, y } end,
+        GetRegions = function(self) return unpack(self.regions or {}) end,
+        GetNormalTexture = function(self)
+            self.normalTexture = self.normalTexture or Fake.new("Texture", self)
+            return self.normalTexture
+        end,
         SetStartPoint = function(self, ...) self.startPoint = { ... } end,
         SetEndPoint = function(self, ...) self.endPoint = { ... } end,
         SetScript = function(self, name, fn) self.scripts[name] = fn end,
@@ -61,6 +76,15 @@ local function trackedMethods()
             self.fontString = self.fontString or Fake.new("FontString", self)
             return self.fontString
         end,
+        GetHighlightTexture = function(self)
+            self.highlightTexture = self.highlightTexture or Fake.new("Texture", self)
+            return self.highlightTexture
+        end,
+        GetPushedTexture = function(self)
+            self.pushedTexture = self.pushedTexture or Fake.new("Texture", self)
+            return self.pushedTexture
+        end,
+        GetAlpha = function(self) return self.alpha or 1 end,
         CreateFontString = function(self) return Fake.new("FontString", self) end,
         CreateTexture = function(self) return Fake.new("Texture", self) end,
         CreateLine = function(self) return Fake.new("Line", self) end,
@@ -118,14 +142,20 @@ end
 function Fake.install()
     timers = {}
     Fake.objects = {}
+    CreateColor = function(r, g, b, a) return { r = r, g = g, b = b, a = a } end
     UIParent = Fake.new("Frame")
     GameTooltip = Fake.new("Frame")
     UISpecialFrames = {}
     tinsert = table.insert
     GetCursorPosition = function() return 0, 0 end
     Fake.frames = {} -- every frame created through CreateFrame, in order
-    CreateFrame = function(kind, name, parent)
+    CreateFrame = function(kind, name, parent, template)
         local o = Fake.new(kind, parent)
+        if template == "UIPanelButtonTemplate" then
+            -- the stock button's body: left cap, middle, right cap (also listed as regions)
+            o.Left, o.Middle, o.Right = Fake.new("Texture", o), Fake.new("Texture", o), Fake.new("Texture", o)
+            o.regions = { o.Left, o.Middle, o.Right }
+        end
         if name then _G[name] = o end
         Fake.frames[#Fake.frames + 1] = o
         return o
@@ -142,7 +172,7 @@ end
 
 --- Remove the globals again, so other specs see a plain Lua environment.
 function Fake.uninstall()
-    for _, name in ipairs({ "UIParent", "GameTooltip", "UISpecialFrames", "tinsert", "GetCursorPosition",
+    for _, name in ipairs({ "CreateColor", "UIParent", "GameTooltip", "UISpecialFrames", "tinsert", "GetCursorPosition",
         "CreateFrame", "C_Timer", "StockistChartWindow" }) do
         _G[name] = nil
     end

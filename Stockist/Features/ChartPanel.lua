@@ -91,7 +91,11 @@ function ChartPanel.Create(parent, opts)
         local b = button(frame, tf.key, 40, "timeframe-" .. tf.key)
         if prev then b:SetPoint("RIGHT", prev, "LEFT", gap, 0) else b:SetPoint("TOPRIGHT", 0, 0) end
         gap = -2
-        b:SetScript("OnClick", function() self.state.timeframe = tf.key; self:Refresh() end)
+        b:SetScript("OnClick", function()
+            if self.state.timeframe == tf.key then return end -- already the active scope
+            self.state.timeframe = tf.key
+            self:Refresh()
+        end)
         self.tfButtons[tf.key] = b
         prev = b
     end
@@ -224,7 +228,10 @@ function ChartPanel:ShowStatus(status)
     self.priceText:SetText("")
 
     local Tooltip = Stockist.UI.Tooltip
-    for _, btn in pairs(self.tfButtons) do Tooltip.SetAvailable(btn, false) end
+    for _, btn in pairs(self.tfButtons) do
+        Tooltip.SetAvailable(btn, false)
+        Stockist.UI.Button.SetSelected(btn, false)
+    end
     for _, btn in pairs(self.toggleButtons) do
         Tooltip.SetAvailable(btn, false)
         paintToggle(btn, false, false)
@@ -273,7 +280,11 @@ function ChartPanel:Refresh()
     self.metaText:SetText(parts and PriceChart.MetaText(parts) or "no data yet")
 
     local Tooltip = Stockist.UI.Tooltip
-    for key, btn in pairs(self.tfButtons) do Tooltip.SetAvailable(btn, key ~= state.timeframe) end
+    -- The active scope is shown as selected (blue), not disabled: it is simply the one in use.
+    for key, btn in pairs(self.tfButtons) do
+        Tooltip.SetAvailable(btn, true)
+        Stockist.UI.Button.SetSelected(btn, key == state.timeframe)
+    end
     for key, btn in pairs(self.toggleButtons) do
         local ok = self.available[key].ok
         Tooltip.SetAvailable(btn, ok) -- a disabled button keeps its tooltip, which says why

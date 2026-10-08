@@ -10,7 +10,7 @@ local FILES = {
     "UI/Charts/Scale.lua", "UI/Charts/Formatters.lua", "UI/Charts/Theme.lua", "UI/Charts/Series/Line.lua",
     "UI/Charts/Series/Candle.lua", "UI/Charts/Series/Bar.lua", "UI/Charts/Overlays/Overlays.lua",
     "UI/Charts/Core.lua", "UI/Charts/FrameCanvas.lua", "UI/Charts/ChartFrame.lua", "UI/Kit/Tooltip.lua",
-    "UI/Kit/IconButton.lua", "UI/Kit/Window.lua", "Features/PriceChart.lua", "Features/ChartPanel.lua",
+    "UI/Kit/Button.lua", "UI/Kit/IconButton.lua", "UI/Kit/Window.lua", "Features/PriceChart.lua", "Features/ChartPanel.lua",
 }
 
 --- A fresh addon with the fake client installed. Item 7 has two days of hourly history, item 8 only
@@ -66,14 +66,161 @@ test("the scope buttons change the chart and show the chosen one as pressed", fu
     local panel = S.ChartPanel.Create(UIParent)
     panel:SetItem(7)
     local dayRange = panel.chart.config.x.range
-    eq(panel.tfButtons["1D"].enabled, false, "1D is selected at first")
-    eq(panel.tfButtons["1W"].enabled, true)
+    local Button = S.UI.Button
+    eq(Button.IsSelected(panel.tfButtons["1D"]), true, "1D is the active scope at first")
+    eq(Button.IsSelected(panel.tfButtons["1W"]), false)
 
     Fake.fire(panel.tfButtons["1W"], "OnClick")
     eq(panel.state.timeframe, "1W")
-    eq(panel.tfButtons["1W"].enabled, false); eq(panel.tfButtons["1D"].enabled, true)
+    eq(Button.IsSelected(panel.tfButtons["1W"]), true); eq(Button.IsSelected(panel.tfButtons["1D"]), false)
     local weekRange = panel.chart.config.x.range
     eq(weekRange[2] - weekRange[1] > dayRange[2] - dayRange[1], true, "a wider window")
+    Fake.uninstall()
+end)
+
+test("the active scope keeps the button art but recoloured blue, with white text and no mouse effects", function()
+    local S = setup()
+    local panel = S.ChartPanel.Create(UIParent)
+    panel:SetItem(7)
+    local active, other = panel.tfButtons["1D"], panel.tfButtons["1W"]
+
+    eq(active.enabled, true, "still enabled, so its tooltip works")
+    for _, key in ipairs({ "Left", "Middle", "Right" }) do
+        eq(active[key].desaturated, true, key .. " is turned grey, which keeps the border and the shading")
+    end
+    local glow = active.selectedGlow
+    eq(glow.shown, true, "a blue layer over the centre")
+    eq(glow.blendMode, "ADD", "added to the grey art, so it brightens the shading instead of darkening it")
+    eq(glow.color[3] > glow.color[1], true, "and it is blue")
+    eq(glow.color[3] > 0.7, true, "a bright blue")
+    -- it sits inside the border, so the grey bevel stays visible
+    local topLeft, bottomRight = glow.points[1], glow.points[2]
+    eq(topLeft[1], "TOPLEFT"); eq(topLeft[2] > 0 and -topLeft[3] > 0, true, "inset from the top-left")
+    eq(bottomRight[1], "BOTTOMRIGHT"); eq(bottomRight[2] < 0 and bottomRight[3] > 0, true, "inset from the bottom-right")
+    local text = active:GetFontString().textColor
+    eq(text[1] == 1 and text[2] == 1 and text[3] == 1, true, "white text")
+    eq(active:GetHighlightTexture().alpha, 0, "no hover effect")
+    eq(active:GetPushedTexture().alpha, 0, "no pressed effect")
+    eq(active.pushedTextOffset[1], 0); eq(active.pushedTextOffset[2], 0, "the label does not indent")
+    eq(#active.clickButtons, 0, "it takes no clicks, so it never enters the pressed state")
+
+    eq(other.enabled, true)
+    for _, key in ipairs({ "Left", "Middle", "Right" }) do
+        eq(other[key].desaturated, false, "inactive scopes keep the stock red art")
+        eq(other[key].vertexColor[1] == 1 and other[key].vertexColor[2] == 1 and other[key].vertexColor[3] == 1, true)
+    end
+    eq(other.selectedGlow.shown, false, "and no blue layer")
+    local gold = other:GetFontString().textColor
+    eq(gold[1] == 1 and gold[2] == 0.82 and gold[3] == 0, true, "inactive scopes keep the normal gold text")
+    eq(other:GetHighlightTexture().alpha, 1, "inactive scopes keep their hover effect")
+    eq(other:GetPushedTexture().alpha, 1)
+    eq(other.pushedTextOffset[1], 1); eq(other.pushedTextOffset[2], -1, "the stock indent on press")
+    eq(other.clickButtons[1], "LeftButtonUp")
+    Fake.uninstall()
+end)
+
+test("the selected button has a gentle blue layer and a vignette that darkens the edges", function()
+    local S = setup()
+    local panel = S.ChartPanel.Create(UIParent)
+    panel:SetItem(7)
+    local btn = panel.tfButtons["1D"]
+    local glow = btn.selectedGlow
+
+    eq(glow.blendMode, "ADD")
+    eq(glow.color[4] > 0.5 and glow.color[4] <= 0.7, true, "bright but not flat: the art's own shading still shows through (not 90%)")
+    eq(#btn.selectedLayers, 5, "the blue layer and four vignette fades")
+
+    local horizontal, vertical = 0, 0
+    for i = 2, 5 do
+        local strip = btn.selectedLayers[i]
+        eq(strip.blendMode, "BLEND", "fades use normal blending")
+        eq(strip.shown, true)
+        local orientation, from, to = strip.gradient[1], strip.gradient[2], strip.gradient[3]
+        if orientation == "HORIZONTAL" then horizontal = horizontal + 1 else vertical = vertical + 1 end
+        eq(from.r == 0 and from.g == 0 and from.b == 0 and to.r == 0 and to.g == 0 and to.b == 0, true, "black fades")
+        local darker, clearer = math.max(from.a, to.a), math.min(from.a, to.a)
+        eq(clearer, 0, "one end is fully transparent")
+        eq(darker > 0 and darker < 1, true, "the other end is a soft dark")
+    end
+    eq(horizontal, 2); eq(vertical, 2, "left and right, top and bottom")
+
+    -- the dark end is at the outer edge, the clear end towards the centre
+    local left, right, top, bottom = btn.selectedLayers[2], btn.selectedLayers[3], btn.selectedLayers[4], btn.selectedLayers[5]
+    eq(left.gradient[2].a > 0 and left.gradient[3].a == 0, true, "left: dark at the left edge")
+    eq(right.gradient[2].a == 0 and right.gradient[3].a > 0, true, "right: dark at the right edge")
+    eq(top.gradient[2].a == 0 and top.gradient[3].a > 0, true, "top: dark at the top (vertical gradients run bottom to top)")
+    eq(bottom.gradient[2].a > 0 and bottom.gradient[3].a == 0, true, "bottom: dark at the bottom")
+
+    -- an inactive button shows none of it
+    for _, layer in ipairs(panel.tfButtons["1W"].selectedLayers) do eq(layer.shown, false) end
+    Fake.uninstall()
+end)
+
+test("the vignette falls back to the older gradient call, and is dropped if neither works", function()
+    local S = setup()
+    local function buttonWith(gradientCall)
+        local btn = CreateFrame("Button", nil, UIParent, "UIPanelButtonTemplate")
+        local make = btn.CreateTexture
+        btn.CreateTexture = function(self, ...)
+            local tex = make(self, ...)
+            gradientCall(tex)
+            return tex
+        end
+        S.UI.Button.SetSelected(btn, true)
+        return btn
+    end
+
+    local old = buttonWith(function(tex)
+        tex.SetGradient = function() error("not in this client") end
+        tex.SetGradientAlpha = function(t, orientation, ...) t.legacyGradient = { orientation, ... } end
+    end)
+    eq(#old.selectedLayers, 5, "all four fades are kept via SetGradientAlpha")
+    eq(old.selectedLayers[2].legacyGradient[1], "HORIZONTAL")
+    eq(#old.selectedLayers[2].legacyGradient, 9, "orientation + two RGBA colours")
+
+    local none = buttonWith(function(tex)
+        tex.SetGradient = function() error("no") end
+        tex.SetGradientAlpha = function() error("no") end
+    end)
+    eq(#none.selectedLayers, 1, "only the blue layer: no solid white blocks")
+    eq(none.selectedGlow.shown, true)
+    Fake.uninstall()
+end)
+
+test("clicking the active scope does nothing, and the blue moves when the scope changes", function()
+    local S = setup()
+    local panel = S.ChartPanel.Create(UIParent)
+    panel:SetItem(7)
+    local drawn = panel.chart.config
+    Fake.fire(panel.tfButtons["1D"], "OnClick")
+    eq(panel.chart.config, drawn, "no redraw for a click on the active scope")
+
+    Fake.fire(panel.tfButtons["1M"], "OnClick")
+    eq(S.UI.Button.IsSelected(panel.tfButtons["1M"]), true)
+    eq(S.UI.Button.IsSelected(panel.tfButtons["1D"]), false, "the old one is released")
+    eq(panel.tfButtons["1M"].Left.desaturated, true)
+    eq(panel.tfButtons["1D"].Left.desaturated, false, "and has its red art back")
+    eq(panel.tfButtons["1D"].selectedGlow.shown, false); eq(panel.tfButtons["1M"].selectedGlow.shown, true, "the blue moved")
+    eq(panel.tfButtons["1D"]:GetHighlightTexture().alpha, 1, "and its hover effect")
+    eq(panel.tfButtons["1D"].clickButtons[1], "LeftButtonUp", "and can be clicked again")
+    eq(panel.tfButtons["1D"].pushedTextOffset[2], -1)
+    Fake.uninstall()
+end)
+
+test("scope buttons go back to normal when a message replaces the chart", function()
+    local S = setup()
+    local panel = S.ChartPanel.Create(UIParent)
+    panel:SetItem(7)
+    panel:SetItem(9)
+    for key, btn in pairs(panel.tfButtons) do
+        eq(btn.enabled, false, key .. " is unavailable while there is nothing to chart")
+        eq(S.UI.Button.IsSelected(btn), false, key .. " is not shown as selected")
+        eq(btn.Left.desaturated, false, key .. " has the stock art")
+    end
+    panel:SetItem(7)
+    for key, btn in pairs(panel.tfButtons) do eq(btn.enabled, true, key .. " is usable again") end
+    eq(S.UI.Button.IsSelected(panel.tfButtons["1D"]), true)
+    eq(panel.tfButtons["1D"].Left.desaturated, true)
     Fake.uninstall()
 end)
 
@@ -182,7 +329,7 @@ test("panels register themselves by name for the workspace", function()
     eq(type.create, S.ChartPanel.Create)
     local panel = type.create(UIParent, { itemID = 7, timeframe = "1W" })
     eq(panel:GetItem(), 7)
-    eq(panel.tfButtons["1W"].enabled, false, "starts on the requested scope")
+    eq(S.UI.Button.IsSelected(panel.tfButtons["1W"]), true, "starts on the requested scope")
     Fake.uninstall()
 end)
 

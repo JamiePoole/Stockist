@@ -96,7 +96,7 @@ local FILES = {
     "UI/Charts/Scale.lua", "UI/Charts/Formatters.lua", "UI/Charts/Theme.lua", "UI/Charts/Series/Line.lua",
     "UI/Charts/Series/Candle.lua", "UI/Charts/Series/Bar.lua", "UI/Charts/Overlays/Overlays.lua",
     "UI/Charts/Core.lua", "UI/Charts/FrameCanvas.lua", "UI/Charts/ChartFrame.lua", "UI/Kit/Tooltip.lua",
-    "UI/Kit/IconButton.lua", "UI/Kit/Window.lua", "Features/PriceChart.lua", "Features/ChartPanel.lua",
+    "UI/Kit/Button.lua", "UI/Kit/IconButton.lua", "UI/Kit/Window.lua", "Features/PriceChart.lua", "Features/ChartPanel.lua",
 }
 
 local function panelSetup()
@@ -174,7 +174,7 @@ test("moving from a message back to a real item restores the chart", function()
     eq(panel.message.shown, false)
     eq(panel.chart.frame.shown, true)
     eq(panel.legendKey.shown, true, "tutorial legend is back")
-    eq(panel.tfButtons["1D"].enabled, false, "1D is selected")
+    eq(S.UI.Button.IsSelected(panel.tfButtons["1D"]), true, "1D is the active scope")
     eq(panel.tfButtons["1W"].enabled, true)
     eq(panel.priceText.text ~= "", true)
     eq(panel.statusKind, nil)
