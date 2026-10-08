@@ -6,3 +6,5 @@
 ## SavedVariables: StockistProbeDB
 
 Probe.lua
+Craft.lua
+Owned.lua
