@@ -192,6 +192,74 @@ test("manual Start refuses when the Auction House is not open", function()
     eq(reason, "open the Auction House first")
 end)
 
+test("closing the window mid-scan does not give the request back: the wait runs from when it was made", function()
+    local S, frame, events = setup({ { item = 10, count = 1, buyout = 100 } })
+    fire(frame, "AUCTION_HOUSE_SHOW")
+    eq(S.Scanner.inProgress, true)
+    eq(S.db.scan.requested, 100000, "the request time is recorded when it is made")
+    fire(frame, "AUCTION_HOUSE_CLOSED")
+    eq(S.Scanner.inProgress, false)
+    eq(events[#events][2]:find("Next scan in 15:00", 1, true) ~= nil, true, "tells the player when to retry: " .. tostring(events[#events][2]))
+
+    S.Clock.now = function() return 100000 + 60 end
+    fire(frame, "AUCTION_HOUSE_SHOW")
+    eq(S.Scanner.inProgress, false, "the reopened window does not start a request the server would ignore")
+    local ok, reason = S.Scanner:Start()
+    eq(ok, false)
+    eq(reason, "next scan available in 14:00")
+
+    S.Clock.now = function() return 100000 + 15 * 60 end
+    eq(S.Scanner:Start(), true, "allowed again once 15 minutes have passed since the request")
+end)
+
+test("a request the server never answers is given up after 45 seconds, not left running forever", function()
+    local S, frame, events, flush = setup({ { item = 10, count = 1, buyout = 100 } })
+    fire(frame, "AUCTION_HOUSE_SHOW")
+    eq(S.Scanner.inProgress, true)
+    flush() -- no REPLICATE_ITEM_LIST_UPDATE ever arrives: run the watchdog
+    eq(S.Scanner.inProgress, false)
+    eq(events[#events][1], "SCAN_FAILED")
+    eq(events[#events][2]:find("no answer from the server after 45 seconds", 1, true) ~= nil, true)
+    -- the stuck state that used to block every later scan is gone: after the wait, a new one can start
+    S.Clock.now = function() return 100000 + 15 * 60 end
+    eq(S.Scanner:Start(), true)
+end)
+
+test("the watchdog of an earlier scan never aborts a later one", function()
+    local S, frame, events, flush = setup({ { item = 10, count = 1, buyout = 100 } })
+    fire(frame, "AUCTION_HOUSE_SHOW")
+    fire(frame, "REPLICATE_ITEM_LIST_UPDATE") -- scan 1 is answered
+    S.Clock.now = function() return 100000 + 15 * 60 end
+    eq(S.Scanner:Start(), true) -- scan 2 starts while scan 1's watchdog timer is still queued
+    fire(frame, "REPLICATE_ITEM_LIST_UPDATE") -- and is answered
+    flush()
+    for _, e in ipairs(events) do eq(e[1] ~= "SCAN_FAILED", true, "no failure expected, got " .. tostring(e[2])) end
+end)
+
+test("an error from ReplicateItems releases the scan instead of leaving it stuck", function()
+    local S, frame, events = setup({ { item = 10, count = 1, buyout = 100 } })
+    C_AuctionHouse.ReplicateItems = function() error("blocked") end
+    fire(frame, "AUCTION_HOUSE_SHOW")
+    eq(S.Scanner.inProgress, false)
+    eq(#events, 1, "reported once, not as both a failure and a skip")
+    eq(events[1][1], "SCAN_SKIPPED")
+    eq(events[1][2]:find("refused the request", 1, true) ~= nil, true)
+    local ok, reason = S.Scanner:Start()
+    eq(ok, false)
+    eq(reason:find("refused the request", 1, true) ~= nil, true, "a manual scan gets the same reason")
+end)
+
+test("a failure while saving a finished scan releases it", function()
+    local S, frame, events, flush = setup({ { item = 10, count = 1, buyout = 100 } })
+    S.store.Add = function() error("disk full") end
+    fire(frame, "AUCTION_HOUSE_SHOW")
+    fire(frame, "REPLICATE_ITEM_LIST_UPDATE")
+    flush()
+    eq(S.Scanner.inProgress, false)
+    eq(events[#events][1], "SCAN_FAILED")
+    eq(events[#events][2]:find("error saving the scan", 1, true) ~= nil, true)
+end)
+
 test("an API error mid-scan fails the scan instead of crashing", function()
     local S, frame, events, flush = setup({ { item = 10, count = 1, buyout = 100 } })
     C_AuctionHouse.GetReplicateItemInfo = function() error("secret value") end
