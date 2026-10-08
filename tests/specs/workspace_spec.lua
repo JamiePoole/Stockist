@@ -10,7 +10,7 @@ local FILES = {
     "UI/Charts/Charts.lua", "UI/Charts/Util.lua", "UI/Charts/Scale.lua", "UI/Charts/Formatters.lua",
     "UI/Charts/Theme.lua", "UI/Charts/Series/Line.lua", "UI/Charts/Series/Candle.lua", "UI/Charts/Series/Bar.lua",
     "UI/Charts/Overlays/Overlays.lua", "UI/Charts/Core.lua", "UI/Charts/FrameCanvas.lua", "UI/Charts/ChartFrame.lua",
-    "UI/Kit/Tooltip.lua", "UI/Kit/Button.lua", "UI/Kit/IconButton.lua", "UI/Kit/Window.lua", "Features/PriceChart.lua", "Features/ChartPanel.lua",
+    "UI/Kit/Tooltip.lua", "UI/Kit/Button.lua", "UI/Kit/IconButton.lua", "UI/Kit/Window.lua", "Features/PriceChart.lua", "Features/ItemPicker.lua", "Features/ChartPanel.lua",
     "Features/Workspace.lua",
 }
 
@@ -342,5 +342,39 @@ test("/stockist workspace opens it, with an optional item, and rejects a bad arg
     S.Commands:Dispatch("workspace banana")
     eq(printed[#printed], "usage: /stockist workspace [itemID or item link]")
     eq(S.Link.Get("A"), 8, "unchanged")
+    Fake.uninstall()
+end)
+
+test("title bar: a 30px bar, 24px controls centred in it, and the same padding as the content", function()
+    local S = setup()
+    local W = S.UI.Window
+    eq(W.TITLE_HEIGHT, 30); eq(W.CONTROL_HEIGHT, 24)
+    eq(W.TITLE_HEIGHT - W.CONTROL_HEIGHT, 6, "three pixels above and below the controls")
+    local win = W.Create({ name = "TitleLayoutTest", title = "T", width = 500, height = 300, search = true })
+    local function lastPoint(o) return o.points[#o.points] end
+
+    local bar = win.title.parent
+    eq(bar.size[2], 30)
+    local tp = lastPoint(win.title)
+    eq(tp[1], "LEFT"); eq(tp[2], bar); eq(tp[4], 8, "title: padding from the left edge"); eq(tp[5], 0, "centred vertically")
+
+    local closeBtn
+    for _, o in ipairs(Fake.objects) do if o.kind == "Button" and o.parent == win.frame and o.size and o.size[1] == 24 and o ~= win.helpButton and o.points and o.points[1][1] == "RIGHT" and o.points[1][2] == bar then closeBtn = o end end
+    eq(closeBtn ~= nil, true, "close button anchored to the bar")
+    local cp = lastPoint(closeBtn)
+    eq(cp[4], -8, "close: the same padding from the right edge"); eq(cp[5], 0, "centred vertically")
+    eq(closeBtn.size[2], 24)
+
+    local hp = lastPoint(win.helpButton)
+    eq(hp[2], closeBtn); eq(hp[5], 0, "help: centred vertically, same line as close")
+    eq(win.helpButton.size[1], 24); eq(win.helpButton.size[2], 24)
+
+    local sp = lastPoint(win.searchBox)
+    eq(sp[1], "CENTER"); eq(sp[2], bar); eq(sp[4], 0); eq(sp[5], 0, "search: centred both ways")
+    eq(win.searchBox.size[2], 24)
+
+    local content = win.content.points
+    eq(content[1][2], 8, "content: the same padding at the left"); eq(content[1][3], -(30 + 4))
+    eq(content[2][2], -8); eq(content[2][3], 8)
     Fake.uninstall()
 end)

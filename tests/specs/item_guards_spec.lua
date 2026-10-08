@@ -205,7 +205,7 @@ end)
 local function commandSetup()
     local S = load_addon("Core/EventBus.lua", "Core/Registry.lua", "Core/Format.lua", "Core/ItemInfo.lua",
         "Core/Commands.lua", "Data/Rollup.lua", "Data/ReadingStore.lua", "Data/Retention.lua", "Data/Tracked.lua",
-        "Core/Config.lua", "Core/Clock.lua", "Features/StatusCommands.lua", "Features/DataCleanup.lua")
+        "Core/Config.lua", "Core/Clock.lua", "Features/ItemPicker.lua", "Features/StatusCommands.lua", "Features/DataCleanup.lua")
     local out = {}
     S.Print = function(msg) out[#out + 1] = msg end
     S.settings = { tracked = {}, retention = {} }
@@ -230,11 +230,11 @@ test("item IDs are parsed strictly", function()
     C_Item = nil
 end)
 
-test("/stockist chart with a bad argument says how to use it instead of opening something else", function()
+test("/stockist chart with an argument that is no ID, link or known name says so instead of opening something else", function()
     local S, out = commandSetup()
     S.store:Add({ item = 7, ts = 1000, price = 5, qty = 1 })
     S.Commands:Dispatch("chart abc")
-    eq(out[#out], "usage: /stockist chart [itemID or item link]")
+    eq(out[#out]:find("no item with prices matches 'abc'", 1, true) ~= nil, true, out[#out])
     eq(#S.shown, 0, "no window opened, and not the richest item")
     S.Commands:Dispatch("chart 12.5")
     eq(#S.shown, 0)

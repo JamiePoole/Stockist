@@ -17,7 +17,14 @@ local BACKDROP = {
     edgeSize = 1,
 }
 
-local TITLE_HEIGHT = 24
+-- Title bar layout: a 30px bar holds 24px controls (buttons, search box) with 3px above and below, all
+-- centred vertically on the bar. PADDING is the space at the window's left and right edges and around the
+-- content, the same everywhere, so the controls line up with the panels below.
+local TITLE_HEIGHT = 30
+local CONTROL_HEIGHT = 24
+local PADDING = 8
+local CONTENT_GAP = 4 -- between the title bar and the content
+Window.TITLE_HEIGHT, Window.CONTROL_HEIGHT, Window.PADDING = TITLE_HEIGHT, CONTROL_HEIGHT, PADDING
 
 local function saveGeometry(frame, name)
     if not (Stockist.settings and name) then return end
@@ -76,19 +83,19 @@ function Window.Create(opts)
     end)
 
     local title = bar:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    title:SetPoint("LEFT", 10, 0)
+    title:SetPoint("LEFT", bar, "LEFT", PADDING, 0)
     title:SetText(opts.title or "")
 
     -- Header buttons sit inside the title bar, right-aligned: close, then the tutorial toggle.
     local close = CreateFrame("Button", nil, frame, "UIPanelCloseButton")
-    close:SetSize(22, 22)
-    close:SetPoint("TOPRIGHT", -3, -1)
+    close:SetSize(CONTROL_HEIGHT, CONTROL_HEIGHT)
+    close:SetPoint("RIGHT", bar, "RIGHT", -PADDING, 0)
     close:SetScript("OnClick", function() frame:Hide() end)
 
     -- Tutorial mode is one account-wide setting shared by every window and tooltip.
     local help = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
-    help:SetSize(24, 24)
-    help:SetPoint("RIGHT", close, "LEFT", -2, 1)
+    help:SetSize(CONTROL_HEIGHT, CONTROL_HEIGHT)
+    help:SetPoint("RIGHT", close, "LEFT", -4, 0)
     help:SetText("?")
     -- Bold, to stand up next to the close button's artwork: the outline thickens the strokes.
     local face, size = help:GetFontString():GetFont()
@@ -110,9 +117,30 @@ function Window.Create(opts)
     Stockist.Events:On("TUTORIAL_CHANGED", paintHelp)
     paintHelp()
 
+    -- Optional search box in the middle of the title bar (opts.search). The caller wires it up, for example
+    -- with Stockist.ItemPicker.Attach(win.searchBox, onPick).
+    local search
+    if opts.search then
+        search = CreateFrame("EditBox", nil, frame, "InputBoxTemplate")
+        search:SetAutoFocus(false)
+        search:SetSize(280, CONTROL_HEIGHT)
+        search:SetPoint("CENTER", bar, "CENTER", 0, 0)
+        search:SetFrameLevel(bar:GetFrameLevel() + 10)
+        local placeholder = search:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+        placeholder:SetPoint("LEFT", 2, 0)
+        placeholder:SetText("Search items")
+        -- The placeholder shows while the box is empty and not being typed in. Whoever sets the box's own
+        -- scripts (the item picker does) must call search.paintPlaceholder after changing its text or focus:
+        -- SetScript replaces the hooks we could add here.
+        local function paint() placeholder:SetShown((search:GetText() or "") == "" and not search:HasFocus()) end
+        search.placeholder, search.paintPlaceholder = placeholder, paint
+        search:HookScript("OnEditFocusLost", paint)
+        paint()
+    end
+
     local content = CreateFrame("Frame", nil, frame)
-    content:SetPoint("TOPLEFT", 8, -TITLE_HEIGHT - 4)
-    content:SetPoint("BOTTOMRIGHT", -8, 8)
+    content:SetPoint("TOPLEFT", PADDING, -(TITLE_HEIGHT + CONTENT_GAP))
+    content:SetPoint("BOTTOMRIGHT", -PADDING, PADDING)
 
     -- Resize grip, bottom-right corner.
     local grip = CreateFrame("Button", nil, frame)
@@ -129,5 +157,5 @@ function Window.Create(opts)
     if opts.name then tinsert(UISpecialFrames, opts.name) end -- Esc closes it
     frame:Hide()
 
-    return { frame = frame, content = content, title = title, helpButton = help }
+    return { frame = frame, content = content, title = title, helpButton = help, searchBox = search }
 end
