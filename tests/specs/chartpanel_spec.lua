@@ -257,6 +257,26 @@ test("a switched-on indicator button is coloured but stays fully clickable; off 
     Fake.uninstall()
 end)
 
+test("the hover glow of a switched-on button is a lighter shade of its colour, and back to stock when off", function()
+    local S = setup()
+    local panel = S.ChartPanel.Create(UIParent)
+    panel:SetItem(7)
+    local sma = panel.toggleButtons.sma
+    local hover = sma:GetHighlightTexture()
+    eq(hover.desaturated, true, "no yellow: the stock glow is made grey first")
+    local c = hover.vertexColor
+    eq(c[2] > c[1] and c[2] > c[3], true, "still green")
+    eq(c[1] > S.UI.Button.STYLES.green[1], true, "but lighter than the button colour")
+    S.UI.Button.SetToggleStyle("gold")
+    c = sma:GetHighlightTexture().vertexColor
+    eq(c[1] > c[3], true, "follows the colour")
+    Fake.fire(sma, "OnClick")
+    hover = sma:GetHighlightTexture()
+    eq(hover.desaturated, false, "stock yellow glow when off")
+    eq(hover.vertexColor[1] == 1 and hover.vertexColor[3] == 1, true)
+    Fake.uninstall()
+end)
+
 test("an indicator the view cannot draw is greyed, not coloured, even if switched on", function()
     local S = setup()
     local panel = S.ChartPanel.Create(UIParent)

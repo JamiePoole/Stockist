@@ -31,7 +31,8 @@ Button.STYLES = {
 }
 Button.STYLE_NAMES = { "blue", "green", "gold" }
 local GLOW_ALPHA = 0.65
-local INSET_X, INSET_Y = 4, 3          -- the layers stay inside the border
+local HOVER_LIGHTEN = 0.55             -- how far the hover glow moves from the colour towards white
+local INSET_X, INSET_Y = 4, 3         -- the layers stay inside the border
 local VIGNETTE_SIDE = { width = 0.30, darkness = 0.55 }   -- left and right fades: fraction of width, strength at the edge
 local VIGNETTE_CAP = { height = 0.38, darkness = 0.40 }   -- top and bottom fades
 local ON_TEXT = { 1, 1, 1 }
@@ -119,6 +120,18 @@ local function applyLook(btn, on, style)
     if not btn.selectedLayers then buildLayers(btn) end
     btn.selectedGlow:SetColorTexture(colour[1], colour[2], colour[3], GLOW_ALPHA)
     for _, layer in ipairs(btn.selectedLayers) do layer:SetShown(on) end
+    -- The stock hover glow is a yellow additive texture, which clashes with a coloured button. Make it grey
+    -- (so it adds plain light) and push it towards the button's colour: a lighter shade of the same hue.
+    local hover = btn:GetHighlightTexture()
+    if type(hover) == "table" and hover.SetVertexColor then
+        if hover.SetDesaturated then hover:SetDesaturated(on) end
+        if on then
+            hover:SetVertexColor(colour[1] + (1 - colour[1]) * HOVER_LIGHTEN, colour[2] + (1 - colour[2]) * HOVER_LIGHTEN,
+                colour[3] + (1 - colour[3]) * HOVER_LIGHTEN)
+        else
+            hover:SetVertexColor(1, 1, 1)
+        end
+    end
     local text = on and ON_TEXT or NORMAL_TEXT
     btn:GetFontString():SetTextColor(text[1], text[2], text[3])
 end
