@@ -7,7 +7,10 @@ local Util = Charts.Util
 -- Up candles (close >= open) use the theme's `up` colour, down candles `down`.
 Charts.series:Register("candle", {
     extent = function(spec)
-        return Util.Extent(spec.points, "l", "h")
+        local xmin, xmax, ymin, ymax = Util.Extent(spec.points, "l", "h")
+        if not xmin then return nil end
+        xmin, xmax = Util.PadHalfStep(spec.points, xmin, xmax)
+        return xmin, xmax, ymin, ymax
     end,
 
     draw = function(spec, ctx)

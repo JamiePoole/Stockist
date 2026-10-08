@@ -234,6 +234,37 @@ test("candles are coloured by direction and have a wick and a body", function()
     eq(bodies[2].color, model.theme.down)
 end)
 
+test("candles and bars at the first and last point stay inside the plot", function()
+    local C = ns().Charts
+    local model = C.Build({
+        panes = {
+            { id = "p", series = { { type = "candle", points = {
+                { x = 0, o = 234, h = 234, l = 234, c = 234 },
+                { x = 3600, o = 434, h = 434, l = 234, c = 234 },
+            } } } },
+            { id = "v", series = { { type = "bar", points = { { x = 0, y = 5 }, { x = 3600, y = 9 } } } } },
+        },
+    }, 640, 360)
+    local canvas = new_recording_canvas()
+    C.Draw(model, canvas)
+    local plot = model.plot
+    local shapes = canvas:find("rect", function(o) return o.w < plot.w end)
+    eq(#shapes, 4, "two candle bodies and two bars")
+    for _, r in ipairs(shapes) do
+        eq(r.x >= plot.x - 1e-9, true, "left edge " .. r.x)
+        eq(r.x + r.w <= plot.x + plot.w + 1e-9, true, "right edge " .. (r.x + r.w))
+    end
+end)
+
+test("a single candle is centred in the plot", function()
+    local C = ns().Charts
+    local model = C.Build({ series = { { type = "candle", points = { { x = 500, o = 1, h = 3, l = 1, c = 2 } } } } }, 300, 200)
+    local canvas = new_recording_canvas()
+    C.Draw(model, canvas)
+    local body = canvas:find("rect", function(o) return o.w < 100 end)[1]
+    near(body.x + body.w / 2, model.plot.x + model.plot.w / 2, 1)
+end)
+
 test("bars rise from zero and use up/down colours when given", function()
     local C = ns().Charts
     local model = C.Build({

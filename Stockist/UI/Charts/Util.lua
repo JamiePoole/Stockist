@@ -46,6 +46,18 @@ function Util.Extent(points, lowField, highField)
     return xmin, xmax, ymin, ymax
 end
 
+--- Widen an x range by half the closest spacing between points, so bars and candles centred on the
+--- first and last point fit inside the plot instead of hanging over its edges.
+function Util.PadHalfStep(points, xmin, xmax)
+    local gap
+    for i = 2, #points do
+        local dx = points[i].x - points[i - 1].x
+        if dx > 0 and (not gap or dx < gap) then gap = dx end
+    end
+    if not gap then return xmin, xmax end
+    return xmin - gap / 2, xmax + gap / 2
+end
+
 --- Clip a segment (x1 <= x2) to xmin <= x <= xmax, interpolating y. Returns nil if fully outside.
 function Util.ClipSegmentX(x1, y1, x2, y2, xmin, xmax)
     if x2 < xmin or x1 > xmax then return nil end

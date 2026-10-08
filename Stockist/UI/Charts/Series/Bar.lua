@@ -10,6 +10,7 @@ Charts.series:Register("bar", {
     extent = function(spec)
         local xmin, xmax, ymin, ymax = Util.Extent(spec.points, "y", "y")
         if not xmin then return nil end
+        xmin, xmax = Util.PadHalfStep(spec.points, xmin, xmax)
         return xmin, xmax, math.min(0, ymin), math.max(0, ymax)
     end,
 
