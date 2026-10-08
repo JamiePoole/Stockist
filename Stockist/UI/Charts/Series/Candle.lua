@@ -3,11 +3,16 @@ local ADDON_NAME, Stockist = ...
 local Charts = Stockist.Charts
 local Util = Charts.Util
 
+local BODY_ALPHA = 0.55
+
 -- spec: { type = "candle", points = { {x, o, h, l, c}... }, barWidth? (pixels), label? }
 -- Up candles (close >= open) use the theme's `up` colour, down candles `down`.
 Charts.series:Register("candle", {
     extent = function(spec)
-        return Util.Extent(spec.points, "l", "h")
+        local xmin, xmax, ymin, ymax = Util.Extent(spec.points, "l", "h")
+        if not xmin then return nil end
+        xmin, xmax = Util.PadHalfStep(spec.points, xmin, xmax)
+        return xmin, xmax, ymin, ymax
     end,
 
     draw = function(spec, ctx)
@@ -20,9 +25,14 @@ Charts.series:Register("candle", {
                 local color = (p.c >= p.o) and ctx.theme.up or ctx.theme.down
                 local yo, yc = ctx.ys:Map(p.o), ctx.ys:Map(p.c)
                 local top, bottom = math.max(yo, yc), math.min(yo, yc)
+                -- The wick (lowest to highest) is solid and drawn above the body, which is see-through,
+                -- so the wick still shows as a bright centre line when the body covers the whole range.
                 ctx.canvas:line(x, Util.Clamp(ctx.ys:Map(p.h), lo, hi),
                     x, Util.Clamp(ctx.ys:Map(p.l), lo, hi), color, 1)
-                ctx.canvas:rect(x - bw / 2, bottom, bw, math.max(1, top - bottom), color)
+                -- A candle whose open and close match has no height; keep it a visible 2px dash.
+                local height = math.max(2, top - bottom)
+                ctx.canvas:rect(x - bw / 2, bottom - (height - (top - bottom)) / 2, bw, height,
+                    { color[1], color[2], color[3], BODY_ALPHA })
             end
         end
     end,

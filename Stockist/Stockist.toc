@@ -14,6 +14,10 @@ Core\EventBus.lua
 Core\Registry.lua
 Core\Format.lua
 Core\Commands.lua
+Core\Calendar.lua
+Core\ItemInfo.lua
+Core\Help.lua
+Core\HelpTopics.lua
 Data\Rollup.lua
 Data\Indicators.lua
 Data\ReadingStore.lua
@@ -33,6 +37,7 @@ UI\Charts\Overlays\Overlays.lua
 UI\Charts\Core.lua
 UI\Charts\FrameCanvas.lua
 UI\Charts\ChartFrame.lua
+UI\Kit\Tooltip.lua
 UI\Kit\Window.lua
 Features\PriceChart.lua
 Features\StatusCommands.lua

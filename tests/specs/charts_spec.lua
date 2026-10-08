@@ -93,6 +93,35 @@ end)
 
 -- Formatters -----------------------------------------------------------------------------------
 
+test("daily data is labelled with dates only, never a time of day", function()
+    local C = ns().Charts
+    local time = C.formatters:Require("time")
+    local t = 1791417600 -- midnight UTC, i.e. 10:00 in UTC+10
+    local daily = { span = 2 * 86400, resolution = 86400 }
+    eq(time(t, daily):find(":", 1, true), nil, "axis label")
+    eq(time(t, { span = 2 * 86400, resolution = 86400, long = true }):find(":", 1, true), nil, "tooltip label")
+    eq(time(t, { span = 3600, resolution = 60 }):find(":", 1, true) ~= nil, true, "fine data keeps the clock time")
+    eq(time(t, { span = 3600, resolution = 3600, long = true }):find(":", 1, true) ~= nil, true)
+end)
+
+test("daily charts put their ticks on UTC midnights, whatever the timezone", function()
+    local C = ns().Charts
+    local day = 86400
+    local model = C.Build({
+        x = { format = "time", resolution = day, tzOffset = 10 * 3600 },
+        series = { { type = "line", points = { { x = 100 * day, y = 1 }, { x = 105 * day, y = 2 } } } },
+    }, 600, 200)
+    local canvas = new_recording_canvas()
+    C.Draw(model, canvas)
+    -- every vertical grid line (x constant) must be at a UTC midnight
+    local verticals = canvas:find("line", function(o) return o.x1 == o.x2 end)
+    eq(#verticals > 2, true)
+    for _, l in ipairs(verticals) do
+        local v = model.xs:Invert(l.x1)
+        if v >= 100 * day - 1 then eq(math.abs(v / day - math.floor(v / day + 0.5)) < 1e-6, true) end
+    end
+end)
+
 test("money, number and int formatters", function()
     local C = ns().Charts
     local money = C.formatters:Require("money")
@@ -199,10 +228,115 @@ test("candles are coloured by direction and have a wick and a body", function()
     local canvas = new_recording_canvas()
     C.Draw(model, canvas)
     eq(canvas:count("line"), 2)
+    local wicks = canvas:find("line")
     local bodies = canvas:find("rect", function(o) return o.w < 100 end)
     eq(#bodies, 2)
-    eq(bodies[1].color, model.theme.up)
-    eq(bodies[2].color, model.theme.down)
+    local function sameHue(a, b) return a[1] == b[1] and a[2] == b[2] and a[3] == b[3] end
+    eq(sameHue(bodies[1].color, model.theme.up), true, "up body")
+    eq(sameHue(bodies[2].color, model.theme.down), true, "down body")
+    eq(sameHue(wicks[1].color, model.theme.up), true, "up wick")
+    eq(sameHue(wicks[2].color, model.theme.down), true, "down wick")
+end)
+
+test("the body is see-through and the wick solid, so the wick shows even inside the body", function()
+    local C = ns().Charts
+    -- opens at the high and closes at the low: the body covers the whole range, no wick sticks out
+    local model = C.Build({ minimal = true, series = { { type = "candle", points = {
+        { x = 100, o = 434, h = 434, l = 200, c = 200 },
+        { x = 200, o = 300, h = 310, l = 290, c = 305 },
+    } } } }, 300, 100)
+    local canvas = new_recording_canvas()
+    C.Draw(model, canvas)
+    for _, b in ipairs(canvas:find("rect", function(o) return o.w < 100 end)) do
+        eq(b.color[4] < 1, true, "body alpha " .. b.color[4])
+    end
+    for _, w in ipairs(canvas:find("line")) do
+        eq(w.color[4], 1, "wick alpha")
+    end
+    local first = canvas:find("line")[1]
+    local body = canvas:find("rect", function(o) return o.w < 100 end)[1]
+    eq(first.x1, body.x + body.w / 2, "wick is down the middle of the body")
+    -- the wick spans exactly the body here (open = high, close = low), so it is only visible through it
+    near(math.max(first.y1, first.y2), body.y + body.h, 1e-6)
+    near(math.min(first.y1, first.y2), body.y, 1e-6)
+end)
+
+test("supply bars are semi-transparent so they do not overpower the price", function()
+    local C = ns().Charts
+    local model = C.Build({ minimal = true, series = { { type = "bar", points = { { x = 1, y = 5 }, { x = 2, y = 9, up = false } } } } }, 200, 100)
+    local canvas = new_recording_canvas()
+    C.Draw(model, canvas)
+    for _, b in ipairs(canvas:find("rect", function(o) return o.w < 100 end)) do
+        near(b.color[4], 0.55, 1e-9)
+    end
+end)
+
+test("candles are narrow: at most 16px however few there are", function()
+    local C = ns().Charts
+    local model = C.Build({ minimal = true, series = { { type = "candle", points = {
+        { x = 0, o = 1, h = 2, l = 1, c = 2 }, { x = 3600, o = 2, h = 3, l = 2, c = 3 } } } } }, 600, 200)
+    local canvas = new_recording_canvas()
+    C.Draw(model, canvas)
+    for _, b in ipairs(canvas:find("rect", function(o) return o.w < 100 end)) do
+        eq(b.w <= 16, true, "width " .. b.w)
+    end
+end)
+
+test("candles and bars at the first and last point stay inside the plot", function()
+    local C = ns().Charts
+    local model = C.Build({
+        panes = {
+            { id = "p", series = { { type = "candle", points = {
+                { x = 0, o = 234, h = 234, l = 234, c = 234 },
+                { x = 3600, o = 434, h = 434, l = 234, c = 234 },
+            } } } },
+            { id = "v", series = { { type = "bar", points = { { x = 0, y = 5 }, { x = 3600, y = 9 } } } } },
+        },
+    }, 640, 360)
+    local canvas = new_recording_canvas()
+    C.Draw(model, canvas)
+    local plot = model.plot
+    local shapes = canvas:find("rect", function(o) return o.w < plot.w end)
+    eq(#shapes, 4, "two candle bodies and two bars")
+    for _, r in ipairs(shapes) do
+        eq(r.x >= plot.x - 1e-9, true, "left edge " .. r.x)
+        eq(r.x + r.w <= plot.x + plot.w + 1e-9, true, "right edge " .. (r.x + r.w))
+    end
+end)
+
+test("a candle with no price movement is still drawn as a visible dash", function()
+    local C = ns().Charts
+    local model = C.Build({ series = { { type = "candle", points = { { x = 1, o = 5, h = 5, l = 5, c = 5 },
+        { x = 2, o = 5, h = 8, l = 4, c = 7 } } } } }, 300, 200)
+    local canvas = new_recording_canvas()
+    C.Draw(model, canvas)
+    local flat = canvas:find("rect", function(o) return o.w < 100 end)[1]
+    eq(flat.h >= 2, true)
+end)
+
+test("stacked panes are separated by a full-width divider", function()
+    local C = ns().Charts
+    local model = C.Build({
+        panes = {
+            { id = "a", series = { { type = "line", points = linePoints(4, function(i) return i end) } } },
+            { id = "b", series = { { type = "bar", points = linePoints(4, function(i) return i end) } } },
+        },
+    }, 400, 300)
+    local canvas = new_recording_canvas()
+    C.Draw(model, canvas)
+    local dividers = canvas:find("line", function(o) return o.y1 == o.y2 and o.x1 == 0 and o.x2 == 400 end)
+    eq(#dividers, 1)
+    local gapTop, gapBottom = model.panes[1].rect.y, model.panes[2].rect.y + model.panes[2].rect.h
+    eq(dividers[1].y1 < gapTop and dividers[1].y1 > gapBottom, true, "sits in the gap between the panes")
+end)
+
+test("a single candle is centred in the plot", function()
+    local C = ns().Charts
+    local model = C.Build({ series = { { type = "candle", points = { { x = 500, o = 1, h = 3, l = 1, c = 2 } } } } }, 300, 200)
+    local canvas = new_recording_canvas()
+    C.Draw(model, canvas)
+    local body = canvas:find("rect", function(o) return o.w < 100 end)[1]
+    near(body.x + body.w / 2, model.plot.x + model.plot.w / 2, 1)
 end)
 
 test("bars rise from zero and use up/down colours when given", function()
@@ -234,6 +368,24 @@ test("axis labels are drawn for non-minimal charts", function()
     local right = canvas:find("text", function(o) return o.anchor == "RIGHT" end)
     eq(#right > 0, true, "y labels are right-anchored at the axis")
     eq(right[1].str:match("g$") ~= nil, true, "money format")
+end)
+
+test("a pane title is drawn in its corner so stacked axes are not confused", function()
+    local C = ns().Charts
+    local model = C.Build({
+        panes = {
+            { id = "p", title = "Price", axis = { format = "money" },
+              series = { { type = "line", points = linePoints(5, function(i) return i * 100 end) } } },
+            { id = "v", title = "Listed", axis = { format = "int" },
+              series = { { type = "bar", points = linePoints(5, function(i) return i end) } } },
+        },
+    }, 400, 300)
+    local canvas = new_recording_canvas()
+    C.Draw(model, canvas)
+    local titles = canvas:find("text", function(o) return o.anchor == "TOPLEFT" end)
+    eq(#titles, 2)
+    eq(titles[1].str, "Price"); eq(titles[2].str, "Listed")
+    eq(titles[1].y > titles[2].y, true, "top pane's title is higher")
 end)
 
 test("a line wider than the x window is clipped, not drawn off the plot", function()

@@ -95,6 +95,52 @@ local function auto(arg)
         .. " (scans when the Auction House opens and every 15 minutes while it stays open).")
 end
 
+local function tutorial(arg)
+    arg = arg:lower()
+    if arg == "on" then
+        Stockist.Help.SetTutorial(true)
+    elseif arg == "off" then
+        Stockist.Help.SetTutorial(false)
+    elseif arg == "" then
+        say("tutorial tips are " .. (Stockist.Help.TutorialEnabled() and "on" or "off")
+            .. ". (/stockist tutorial on|off, or the ? button in a window's title bar)")
+    else
+        say("usage: /stockist tutorial [on|off]")
+    end
+end
+
+-- Diagnostic: prints every clock the game exposes so time labels can be checked against a wall clock.
+local function timeinfo()
+    local server = GetServerTime()
+    local function fmt(f, t) return date(f, t) end
+    say("--- time diagnostic (compare with your computer's clock) ---")
+    say(("GetServerTime() = %d  (should be about %d)"):format(server, os and os.time and os.time() or server))
+    say("date('%H:%M:%S')            local now   : " .. fmt("%H:%M:%S"))
+    say("date('%H:%M:%S', server)    local format: " .. fmt("%H:%M:%S", server))
+    say("date('!%H:%M:%S', server)   UTC format  : " .. fmt("!%H:%M:%S", server))
+    say(("time() = %d  (time() - GetServerTime() = %d s)"):format(time(), time() - server))
+    say(("tzOffset used for chart ticks = %d s"):format(Stockist.Clock.tzOffset()))
+    if GetGameTime then
+        local h, m = GetGameTime()
+        say(("realm time (GetGameTime) = %02d:%02d"):format(h, m))
+    end
+    local last = Stockist.db.scan.last
+    if last then
+        say(("last scan: %d -> date() says %s (%s)"):format(last, fmt("%Y-%m-%d %H:%M:%S", last),
+            Format.Age(server - last)))
+    end
+    local id = richestItem()
+    if id then
+        local ticks = Stockist.store:Ticks(id)
+        say(("item %d: %d recorded scans%s"):format(id, #ticks, #ticks > 0 and
+            (", first " .. fmt("%H:%M:%S", ticks[1].x) .. ", last " .. fmt("%H:%M:%S", ticks[#ticks].x)) or ""))
+        local hourly = Stockist.store:GetCandles(id, "hourly")
+        for i = math.max(1, #hourly - 3), #hourly do
+            say(("  hourly candle t=%d -> %s"):format(hourly[i].t, fmt("%Y-%m-%d %H:%M", hourly[i].t)))
+        end
+    end
+end
+
 local C = Stockist.Commands
 C:Register("status", { help = "status              what we hold and when we last scanned", run = status })
 C:Register("scan", { help = "scan                scan the Auction House now", run = function()
@@ -105,6 +151,8 @@ C:Register("item", { help = "item <id|link>      latest price and 24h change", r
 C:Register("chart", { help = "chart [id|link]     open the price window", run = chart })
 C:Register("movers", { help = "movers              biggest 24h risers and fallers", run = movers })
 C:Register("auto", { help = "auto [on|off]       re-scan while the Auction House is open", run = auto })
+C:Register("tutorial", { help = "tutorial [on|off]   long explanations in tooltips and the chart legend", run = tutorial })
+C:Register("time", { help = "time                print the game's clocks next to stored scan times (debugging)", run = timeinfo })
 
 -- Report scan outcomes.
 Stockist.Events:On("SCAN_COMPLETE", function(count)

@@ -7,9 +7,11 @@ local Util = Charts.Util
 -- Config:
 --   {
 --     theme = "dark", minimal = false (no axes or padding: sparklines), padding = {left,right,top,bottom},
---     x = { format = "time", range = {min, max}?, tzOffset = seconds? },
+--     x = { format = "time", range = {min, max}?, tzOffset = seconds?, resolution = seconds per data point?,
+--           ticks = { explicit tick values }? },
 --     panes = {
---       { id = "price", weight = 3, axis = { format = "money" }, y = { range = {min, max}? },
+--       { id = "price", weight = 3, title = "Price" (shown in the corner), axis = { format = "money" },
+--         y = { range = {min, max}? },
 --         series   = { { type = "candle", id = "price", points = ... } },
 --         overlays = { { type = "sma", of = "price", period = 20 } } },
 --       { id = "supply", weight = 1, axis = { format = "int" }, series = { { type = "bar", points = ... } } },
@@ -143,9 +145,11 @@ function Charts.Build(config, w, h)
     return model
 end
 
-local function axisLabel(model, value)
-    local span = model.xs.d1 - model.xs.d0
-    return Charts.formatters:Require(model.xformat)(value, { span = span })
+local function axisLabel(model, value, long)
+    local x = model.config.x or {}
+    return Charts.formatters:Require(model.xformat)(value, {
+        span = model.xs.d1 - model.xs.d0, resolution = x.resolution, long = long,
+    })
 end
 
 local function paneContext(model, pane, entry, canvas)
@@ -163,7 +167,12 @@ local function drawAxes(model, canvas)
     -- Vertical grid and x labels
     local ticks
     if model.xformat == "time" then
-        ticks = Scale.TimeTicks(xs.d0, xs.d1, math.max(2, math.floor(plot.w / 80)), model.config.x.tzOffset)
+        -- Daily candles sit on UTC midnights (so every player's buckets agree). Put the ticks there
+        -- too, so each tick lines up with its candle; only finer data uses local clock boundaries.
+        local x = model.config.x
+        local daily = x.resolution and x.resolution >= 86400
+        ticks = x.ticks -- a feature may pin the ticks (month starts, midnights...)
+            or Scale.TimeTicks(xs.d0, xs.d1, math.max(2, math.floor(plot.w / 80)), daily and 0 or x.tzOffset)
     else
         ticks = Scale.Ticks(xs.d0, xs.d1, math.max(2, math.floor(plot.w / 80)))
     end
@@ -174,9 +183,16 @@ local function drawAxes(model, canvas)
     end
 
     -- Horizontal grid and y labels, per pane
-    for _, pane in ipairs(model.panes) do
+    for i, pane in ipairs(model.panes) do
         local r = pane.rect
+        -- Divider in the gap between stacked panes, full width so it also crosses the label gutter.
+        if i < #model.panes then
+            canvas:line(0, r.y - PANE_GAP / 2, model.w, r.y - PANE_GAP / 2, t.axis, 1)
+        end
         canvas:line(r.x, r.y, r.x, r.y + r.h, t.axis, 1)
+        if pane.def.title then
+            canvas:text(r.x + 6, r.y + r.h - 4, pane.def.title, { t.text[1], t.text[2], t.text[3], 0.6 }, "TOPLEFT")
+        end
         for _, v in ipairs(Scale.Ticks(pane.ys.d0, pane.ys.d1, math.max(2, math.floor(r.h / 40)))) do
             local y = pane.ys:Map(v)
             canvas:line(r.x, y, r.x + r.w, y, t.grid, 1)
@@ -197,6 +213,11 @@ function Charts.Draw(model, canvas)
         return
     end
     if not model.config.minimal then drawAxes(model, canvas) end
+    if model.config.note then
+        local plot = model.plot
+        canvas:text(plot.x + plot.w - 6, plot.y + plot.h - 4, model.config.note,
+            { t.text[1], t.text[2], t.text[3], 0.55 }, "TOPRIGHT")
+    end
     for _, pane in ipairs(model.panes) do
         for _, entry in ipairs(pane.entries) do
             entry.plugin.draw(entry.spec, paneContext(model, pane, entry, canvas))
@@ -233,8 +254,7 @@ function Charts.Hover(model, canvas, px, py)
             canvas:line(sx, plot.y, sx, plot.y + plot.h, t.crosshair, 1)
             canvas:line(plot.x, py, plot.x + plot.w, py, t.crosshair, 1)
 
-            local header = axisLabel(model, snapped)
-            if model.xformat == "time" then header = (date or os.date)("%d %b %H:%M", snapped) end
+            local header = axisLabel(model, snapped, true)
             local lines = { { text = header, color = t.text } }
             for _, row in ipairs(rows) do lines[#lines + 1] = row end
 

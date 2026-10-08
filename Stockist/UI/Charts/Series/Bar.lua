@@ -10,6 +10,7 @@ Charts.series:Register("bar", {
     extent = function(spec)
         local xmin, xmax, ymin, ymax = Util.Extent(spec.points, "y", "y")
         if not xmin then return nil end
+        xmin, xmax = Util.PadHalfStep(spec.points, xmin, xmax)
         return xmin, xmax, math.min(0, ymin), math.max(0, ymax)
     end,
 
@@ -21,7 +22,7 @@ Charts.series:Register("bar", {
             if p.x >= ctx.xs.d0 and p.x <= ctx.xs.d1 then
                 local color = ctx.color
                 if p.up ~= nil then color = p.up and ctx.theme.up or ctx.theme.down end
-                color = { color[1], color[2], color[3], 0.6 }
+                color = { color[1], color[2], color[3], 0.55 }
                 local y = Util.Clamp(ctx.ys:Map(p.y), lo, hi)
                 ctx.canvas:rect(ctx.xs:Map(p.x) - bw / 2, math.min(base, y), bw, math.max(1, math.abs(y - base)), color)
             end

@@ -57,5 +57,7 @@ function load_support(name)
 end
 
 function report()
-    return passed, #failures, table.concat(failures, "\n")
+    -- Failure text can contain raw bytes (e.g. a file with a stray byte-order mark); keep the report printable.
+    local text = table.concat(failures, "\n"):gsub("[\128-\255]", "?")
+    return passed, #failures, text
 end

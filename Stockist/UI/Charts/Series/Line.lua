@@ -23,10 +23,15 @@ Charts.series:Register("line", {
                     ctx.color, width)
             end
         end
-        -- A lone point has no segment; show it as a dot so the series is not invisible.
-        if #points == 1 then
-            local x, y = ctx.xs:Map(points[1].x), ctx.ys:Map(points[1].y)
-            ctx.canvas:rect(x - 2, y - 2, 4, 4, ctx.color)
+        -- Dots at the data points: always for a lone point (no segment to see), and on request
+        -- (`markers = true`) so each individual reading is visible on a sparse line.
+        if spec.markers or #points == 1 then
+            for _, p in ipairs(points) do
+                if p.x >= ctx.xs.d0 and p.x <= ctx.xs.d1 then
+                    local x, y = ctx.xs:Map(p.x), Util.Clamp(ctx.ys:Map(p.y), lo, hi)
+                    ctx.canvas:rect(x - 2, y - 2, 4, 4, ctx.color)
+                end
+            end
         end
     end,
 

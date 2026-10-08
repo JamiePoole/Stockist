@@ -1,19 +1,37 @@
 local ADDON_NAME, Stockist = ...
 
--- Price window for one item: candles + moving average / Bollinger bands on top, supply bars below.
--- BuildConfig is pure (store in, chart config out); Show/the window are the game-facing part.
+-- Price window for one item: candles (or one point per scan when there is little history) with
+-- moving average / Bollinger bands on top, supply bars below. BuildConfig is pure (store in, chart
+-- config out); Show and the window are the game-facing part.
 local Format = Stockist.Format
 
 local PriceChart = {}
 Stockist.PriceChart = PriceChart
 
+-- `prefer` lists the data kinds to try, best first: "ticks" (one point per scan), "hourly" and
+-- "daily" candles. The first kind with at least MIN_POINTS points is used, so a young data set
+-- falls back to finer detail instead of showing a single mark. The scopes are rolling windows that
+-- end now (the last 24 hours, 7 days, 30 days), as on any chart for a market that never closes.
+-- Not offered yet: ALL (everything stored); see docs/ROADMAP.md.
 local TIMEFRAMES = {
-    { key = "1D", res = "hourly", span = 86400 },
-    { key = "1W", res = "hourly", span = 7 * 86400 },
-    { key = "1M", res = "daily", span = 30 * 86400 },
-    { key = "ALL", res = "daily", span = nil },
+    { key = "1D", span = 86400, prefer = { "hourly", "ticks" } },
+    { key = "1W", span = 7 * 86400, prefer = { "hourly", "ticks" } },
+    { key = "1M", span = 30 * 86400, prefer = { "daily", "hourly", "ticks" } },
 }
+-- Indicator settings. A moving average needs `period` points before its first value, so a line needs
+-- period + 1. The periods are modest because Auction House history is sparse (the textbook Bollinger
+-- period of 20 would rarely be available).
+local SMA_PERIOD, BOLLINGER_PERIOD, BOLLINGER_K = 7, 10, 2
+local FORWARD_MARGIN = 0.03 -- empty space after "now", as a fraction of the window
+local MIN_POINTS = 3
+local RESOLUTION = { ticks = 60, hourly = 3600, daily = 86400 }
+local KIND_NAME = { ticks = "one point per scan", hourly = "hourly candles", daily = "daily candles" }
 PriceChart.TIMEFRAMES = TIMEFRAMES
+
+--- Help topics the window attaches to its widgets (checked by tests against Core/HelpTopics.lua).
+PriceChart.HELP_KEYS = {
+    "timeframe-1D", "timeframe-1W", "timeframe-1M", "sma", "bollinger", "tutorial",
+}
 
 local function timeframe(key)
     for _, tf in ipairs(TIMEFRAMES) do
@@ -22,101 +40,280 @@ local function timeframe(key)
     return TIMEFRAMES[2]
 end
 
---- Chart config for an item.
----   indicators = { sma = bool, bollinger = bool }
-function PriceChart.BuildConfig(store, itemID, key, indicators, now, tzOffset)
-    local tf = timeframe(key)
-    local candles = store:GetCandles(itemID, tf.res, tf.span and (now - tf.span) or nil, nil)
-
-    local price, supply = {}, {}
-    for i, c in ipairs(candles) do
-        price[i] = { x = c.t, o = c.o, h = c.h, l = c.l, c = c.c }
+--- The price series and supply bars for one kind of data: { price = series spec, supply = points, count }.
+local function seriesFor(store, itemID, kind, fromTs)
+    local supply = {}
+    if kind == "ticks" then
+        local ticks = store:Ticks(itemID, fromTs)
+        local line = {}
+        for i, t in ipairs(ticks) do
+            line[i] = { x = t.x, y = t.y }
+            supply[i] = { x = t.x, y = t.q, up = (i == 1) or t.y >= ticks[i - 1].y }
+        end
+        return {
+            price = { type = "line", id = "price", label = "price", points = line, markers = true },
+            supply = supply, count = #line,
+        }
+    end
+    local points = {}
+    for i, c in ipairs(store:GetCandles(itemID, kind, fromTs, nil)) do
+        points[i] = { x = c.t, o = c.o, h = c.h, l = c.l, c = c.c }
         supply[i] = { x = c.t, y = c.q, up = c.c >= c.o }
     end
+    return { price = { type = "candle", id = "price", points = points }, supply = supply, count = #points }
+end
 
+--- The rolling window a scope covers: start, end and the axis tick times. The window ends a little
+--- after `now` (FORWARD_MARGIN) so the newest candle does not sit on the edge. Ticks fall on round
+--- local times:
+---   1D  every 3 hours (00:00, 03:00 ...)
+---   1W  every local midnight
+---   1M  every Monday midnight
+function PriceChart.Window(key, now, tz)
+    local Calendar = Stockist.Calendar
+    local tf = timeframe(key)
+    local from = now - tf.span
+    local to = now + math.floor(tf.span * FORWARD_MARGIN)
+    local ticks = {}
+    if tf.key == "1D" then
+        for t = Calendar.NextBoundary(from, 3 * 3600, tz), to, 3 * 3600 do ticks[#ticks + 1] = t end
+    elseif tf.key == "1W" then
+        for t = Calendar.NextBoundary(from, 86400, tz), to, 86400 do ticks[#ticks + 1] = t end
+    else
+        local monday = Calendar.WeekStart(from, tz)
+        if monday < from then monday = monday + 7 * 86400 end
+        for t = monday, to, 7 * 86400 do ticks[#ticks + 1] = t end
+    end
+    return from, to, ticks
+end
+
+--- Chart config for an item.
+---   indicators = { sma = bool, bollinger = bool }
+--- The x axis is the scope's rolling window (see Window). Each view prefers one kind of data (see
+--- TIMEFRAMES) and falls back to a finer kind while it has fewer than MIN_POINTS points; a corner note
+--- says so. The result also carries `indicators`, saying for each one how many points it needs and
+--- has, so the window can disable a button that could not draw anything.
+function PriceChart.BuildConfig(store, itemID, key, indicators, now, tzOffset)
+    local tf = timeframe(key)
+    tzOffset = tzOffset or 0
+    local windowStart, windowEnd, ticks = PriceChart.Window(tf.key, now, tzOffset)
+
+    local chosen, chosenKind, richest, richestKind
+    for _, kind in ipairs(tf.prefer) do
+        local s = seriesFor(store, itemID, kind, windowStart)
+        if s.count >= MIN_POINTS then chosen, chosenKind = s, kind break end
+        if not richest or s.count > richest.count then richest, richestKind = s, kind end
+    end
+    if not chosen then chosen, chosenKind = richest, richestKind end
+
+    local notes = {}
+    if chosenKind ~= tf.prefer[1] then
+        notes[#notes + 1] = ("Not enough history yet for %s: showing %s"):format(
+            KIND_NAME[tf.prefer[1]], KIND_NAME[chosenKind])
+    end
+
+    -- An indicator is only drawn when the view has enough points for it. Whether the player switched
+    -- it on is remembered separately, so it comes back by itself once the data is there.
+    local n = chosen.count
+    local available = {
+        sma = { need = SMA_PERIOD + 1, have = n, ok = n >= SMA_PERIOD + 1 },
+        bollinger = { need = BOLLINGER_PERIOD + 1, have = n, ok = n >= BOLLINGER_PERIOD + 1 },
+    }
     local overlays = {}
     indicators = indicators or {}
-    if indicators.sma then overlays[#overlays + 1] = { type = "sma", of = "price", period = 7 } end
-    if indicators.bollinger then overlays[#overlays + 1] = { type = "bollinger", of = "price", period = 10, k = 2 } end
+    if indicators.sma and available.sma.ok then
+        overlays[#overlays + 1] = { type = "sma", of = "price", period = SMA_PERIOD }
+    end
+    if indicators.bollinger and available.bollinger.ok then
+        overlays[#overlays + 1] = { type = "bollinger", of = "price", period = BOLLINGER_PERIOD, k = BOLLINGER_K }
+    end
+    local note = #notes > 0 and table.concat(notes, ". ") or nil
 
     return {
-        x = { format = "time", tzOffset = tzOffset or 0 },
+        indicators = available,
+        transparent = true, -- the window supplies the background
+        x = {
+            format = "time", tzOffset = tzOffset, resolution = RESOLUTION[chosenKind],
+            range = { windowStart, windowEnd }, ticks = ticks,
+        },
         emptyText = "No readings in this range yet",
+        note = note,
         panes = {
             {
-                id = "price", weight = 3, axis = { format = "money" },
-                series = { { type = "candle", id = "price", points = price } },
-                overlays = overlays,
+                id = "price", weight = 3, title = "Price", axis = { format = "money" },
+                series = { chosen.price }, overlays = overlays,
             },
             {
-                id = "supply", weight = 1, axis = { format = "int" },
-                series = { { type = "bar", label = "listed", points = supply } },
+                id = "supply", weight = 1, title = "Listed for sale", axis = { format = "int" },
+                series = { { type = "bar", label = "listed", points = chosen.supply } },
             },
         },
     }
 end
 
---- One-line summary: "Linen Cloth  1g 20s (24h +3.10%)  updated 12m ago".
-function PriceChart.Header(store, itemID, now, name)
+--- The numbers the header shows: { price, min, change (24h percent), age (seconds) }; nil when the
+--- item has no reading.
+function PriceChart.HeaderParts(store, itemID, now)
     local last = store:Latest(itemID)
-    if not last then return name .. "  (no data)" end
-    local line = ("%s  %s"):format(name, Format.Money(last.price))
-    local pct = store:Change(itemID, 86400, now)
-    if pct then line = line .. "  (24h " .. Format.Percent(pct) .. ")" end
-    return line .. "  updated " .. Format.Age(now - last.ts)
+    if not last then return nil end
+    return { price = last.price, min = last.min, change = store:Change(itemID, 86400, now), age = now - last.ts }
+end
+
+--- Plain one-line summary: "Linen Cloth  1g 20s (24h +3.10%)  updated 12m ago". `name` may carry colour codes.
+function PriceChart.Header(store, itemID, now, name)
+    local p = PriceChart.HeaderParts(store, itemID, now)
+    if not p then return name .. "  (no data)" end
+    local line = ("%s  %s"):format(name, Format.Money(p.price))
+    if p.change then line = line .. "  (24h " .. Format.Percent(p.change) .. ")" end
+    return line .. "  updated " .. Format.Age(p.age)
+end
+
+--- The text after the price: "+3.10% 24h  updated 12m ago", the change coloured green or red.
+function PriceChart.MetaText(parts)
+    local pieces = {}
+    if parts.change then
+        local r, g, b = 0.6, 0.6, 0.6
+        if parts.change > 0 then r, g, b = 0.2, 0.78, 0.45 elseif parts.change < 0 then r, g, b = 0.92, 0.3, 0.3 end
+        pieces[#pieces + 1] = Format.Colored(Format.Percent(parts.change), r, g, b) .. " 24h"
+    end
+    pieces[#pieces + 1] = "updated " .. Format.Age(parts.age)
+    return table.concat(pieces, "   ")
 end
 
 ---------------------------------------------------------------------------------------------------
 -- Window (game only)
 ---------------------------------------------------------------------------------------------------
 
-local state = { itemID = nil, timeframe = "1W", indicators = { sma = true, bollinger = false } }
-local win, chart, header, tfButtons, toggleButtons
+local state = { itemID = nil, timeframe = "1D", indicators = { sma = true, bollinger = false } }
+local win, chart, nameText, nameHit, priceText, metaText, legendKey, legendTips, tfButtons, toggleButtons
 
-local function paintToggle(btn, on)
+local available = {} -- indicator availability for the chart on screen, set by refresh
+
+local function paintToggle(btn, on, enabled)
     local fs = btn:GetFontString()
-    if on then fs:SetTextColor(0.3, 1, 0.5) else fs:SetTextColor(1, 0.82, 0) end
+    if not enabled then fs:SetTextColor(0.5, 0.5, 0.5)
+    elseif on then fs:SetTextColor(0.3, 1, 0.5)
+    else fs:SetTextColor(1, 0.82, 0) end
+end
+
+local LEGEND_GAP = 12 -- empty space between the chart and the legend below it
+
+--- Size the chart to leave room for the legend (tutorial mode) under it, whose height follows its text.
+local function layoutChart()
+    local tutorial = Stockist.Help.TutorialEnabled()
+    legendKey:SetShown(tutorial)
+    legendTips:SetShown(tutorial)
+    local legendHeight = 0
+    if tutorial then
+        -- Before the first layout pass the width is 0 and the measured height is not meaningful.
+        local known = legendKey:GetWidth() > 1
+        legendHeight = known and math.max(legendKey:GetStringHeight(), legendTips:GetStringHeight()) or 110
+    end
+    chart.frame:ClearAllPoints()
+    chart.frame:SetPoint("TOPLEFT", win.content, "TOPLEFT", 0, -28)
+    chart.frame:SetPoint("BOTTOMRIGHT", win.content, "BOTTOMRIGHT", 0, tutorial and (legendHeight + LEGEND_GAP) or 0)
 end
 
 local function refresh()
     if not (win and state.itemID and Stockist.store) then return end
     local now = Stockist.Clock.now()
-    chart:SetConfig(PriceChart.BuildConfig(Stockist.store, state.itemID, state.timeframe,
-        state.indicators, now, Stockist.Clock.tzOffset()))
-    header:SetText(PriceChart.Header(Stockist.store, state.itemID, now, Stockist.ItemName(state.itemID)))
-    win.title:SetText("Stockist")
-    for key, btn in pairs(tfButtons) do btn:SetEnabled(key ~= state.timeframe) end
-    for key, btn in pairs(toggleButtons) do paintToggle(btn, state.indicators[key]) end
+    local config = PriceChart.BuildConfig(Stockist.store, state.itemID, state.timeframe,
+        state.indicators, now, Stockist.Clock.tzOffset())
+    chart:SetConfig(config)
+    available = config.indicators
+
+    nameText:SetText(Stockist.ItemInfo.ColoredName(state.itemID))
+    nameHit:SetSize(math.max(1, nameText:GetStringWidth()), math.max(1, nameText:GetStringHeight()))
+    local parts = PriceChart.HeaderParts(Stockist.store, state.itemID, now)
+    priceText:SetText(parts and Format.MoneyDisplay(parts.price) or "")
+    metaText:SetText(parts and PriceChart.MetaText(parts) or "no data yet")
+
+    local Tooltip = Stockist.UI.Tooltip
+    for key, btn in pairs(tfButtons) do Tooltip.SetAvailable(btn, key ~= state.timeframe) end
+    for key, btn in pairs(toggleButtons) do
+        local ok = available[key].ok
+        Tooltip.SetAvailable(btn, ok) -- a disabled button keeps its tooltip, which says why
+        paintToggle(btn, state.indicators[key], ok)
+    end
+
+    -- The legend under the chart is part of tutorial mode (toggled from the window header).
+    local key, tips = Stockist.Help.Legend()
+    legendKey:SetText(key or "")
+    legendTips:SetText(tips or "")
+    layoutChart()
 end
 
-local function button(parent, text, width)
+local function button(parent, text, width, helpKey, extra)
     local b = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
     b:SetSize(width, 20)
     b:SetText(text)
+    Stockist.UI.Tooltip.Attach(b, helpKey, extra)
     return b
 end
 
+--- Tooltip line for an indicator button that cannot draw yet.
+local function whyDisabled(key)
+    return function()
+        local a = available[key]
+        if a and not a.ok then
+            return ("Not available in this view yet: it needs at least %d points and this view has %d."):format(a.need, a.have)
+        end
+    end
+end
+
+local function showItemTooltip(owner, itemID)
+    GameTooltip:SetOwner(owner, "ANCHOR_RIGHT")
+    if GameTooltip.SetItemByID then
+        GameTooltip:SetItemByID(itemID)
+    else
+        GameTooltip:SetHyperlink("item:" .. itemID)
+    end
+    GameTooltip:Show()
+end
+
 local function createWindow()
-    win = Stockist.UI.Window.Create({ name = "StockistChartWindow", title = "Stockist", width = 680, height = 440 })
+    win = Stockist.UI.Window.Create({
+        name = "StockistChartWindow", title = "Stockist", width = 680, height = 520, minWidth = 520, minHeight = 420,
+    })
     local content = win.content
 
-    header = content:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    header:SetPoint("TOPLEFT", 2, -2)
+    -- Header, left to right: item name (hover for its tooltip), price, 24h change and age.
+    nameText = content:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    nameText:SetPoint("TOPLEFT", 2, -4)
+    nameHit = CreateFrame("Frame", nil, content)
+    nameHit:SetPoint("TOPLEFT", nameText, "TOPLEFT")
+    nameHit:EnableMouse(true)
+    nameHit:SetScript("OnEnter", function(self)
+        if state.itemID then showItemTooltip(self, state.itemID) end
+    end)
+    nameHit:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
+    priceText = content:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    priceText:SetPoint("LEFT", nameText, "RIGHT", 12, 0)
+    metaText = content:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    metaText:SetPoint("LEFT", priceText, "RIGHT", 12, 0)
+
+    -- Controls, right to left: time scope buttons | divider | chart overlays.
     tfButtons, toggleButtons = {}, {}
     local prev
     for i = #TIMEFRAMES, 1, -1 do
         local tf = TIMEFRAMES[i]
-        local b = button(content, tf.key, 40)
+        local b = button(content, tf.key, 40, "timeframe-" .. tf.key)
         if prev then b:SetPoint("RIGHT", prev, "LEFT", -2, 0) else b:SetPoint("TOPRIGHT", 0, 0) end
         b:SetScript("OnClick", function() state.timeframe = tf.key; refresh() end)
         tfButtons[tf.key] = b
         prev = b
     end
-    for _, def in ipairs({ { "bollinger", "BB" }, { "sma", "SMA" } }) do
-        local b = button(content, def[2], 40)
-        b:SetPoint("RIGHT", prev, "LEFT", -10, 0)
-        b:SetScript("OnClick", function()
+    local divider = content:CreateTexture(nil, "ARTWORK")
+    divider:SetColorTexture(1, 1, 1, 0.18)
+    divider:SetSize(1, 18)
+    divider:SetPoint("RIGHT", prev, "LEFT", -7, 0)
+    prev = divider
+    for _, def in ipairs({ { "bollinger", "BB", "bollinger" }, { "sma", "SMA", "sma" } }) do
+        local b = button(content, def[2], 40, def[3], whyDisabled(def[1]))
+        b:SetPoint("RIGHT", prev, "LEFT", -7, 0)
+        b:SetScript("OnClick", function(self)
+            if not Stockist.UI.Tooltip.IsAvailable(self) then return end
             state.indicators[def[1]] = not state.indicators[def[1]]
             refresh()
         end)
@@ -125,8 +322,32 @@ local function createWindow()
     end
 
     chart = Stockist.Charts.Create(content, { series = {} })
-    chart.frame:SetPoint("TOPLEFT", content, "TOPLEFT", 0, -28)
-    chart.frame:SetPoint("BOTTOMRIGHT")
+
+    -- Legend: the key on the left, "what to look for" (blue) on the right. The text carries its own
+    -- colours, so the font strings are plain white by default.
+    -- Both columns hang from the same line just under the chart, so their headings are level. Each runs
+    -- from `leftAnchor` (offset leftX) to `rightAnchor` (offset rightX) along the chart's bottom edge.
+    local function legendColumn(leftAnchor, leftX, rightAnchor, rightX)
+        local fs = content:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        fs:SetPoint("TOPLEFT", chart.frame, leftAnchor, leftX, -LEGEND_GAP)
+        fs:SetPoint("TOPRIGHT", chart.frame, rightAnchor, rightX, -LEGEND_GAP)
+        fs:SetJustifyH("LEFT")
+        fs:SetJustifyV("TOP")
+        fs:SetTextColor(1, 1, 1)
+        fs:SetWordWrap(true)
+        return fs
+    end
+    legendKey = legendColumn("BOTTOMLEFT", 2, "BOTTOM", -10)
+    legendTips = legendColumn("BOTTOM", 10, "BOTTOMRIGHT", -2)
+    -- The legend's height depends on its width, so make room for it again whenever the window resizes.
+    content:SetScript("OnSizeChanged", function() if state.itemID then layoutChart() end end)
+
+    -- Item names arrive from the server a moment after the first request.
+    local loader = CreateFrame("Frame")
+    loader:RegisterEvent("GET_ITEM_INFO_RECEIVED")
+    loader:SetScript("OnEvent", function(_, _, itemID)
+        if win.frame:IsShown() and itemID == state.itemID then refresh() end
+    end)
 end
 
 --- Open the price window for an item.
@@ -135,8 +356,16 @@ function PriceChart.Show(itemID)
     state.itemID = itemID
     refresh()
     win.frame:Show()
+    -- The legend's text height is only known once it has a width, i.e. after the first layout pass.
+    C_Timer.After(0, function()
+        if win.frame:IsShown() then layoutChart() end
+    end)
 end
 
 Stockist.Events:On("SCAN_COMPLETE", function()
+    if win and win.frame:IsShown() then refresh() end
+end)
+
+Stockist.Events:On("TUTORIAL_CHANGED", function()
     if win and win.frame:IsShown() then refresh() end
 end)
