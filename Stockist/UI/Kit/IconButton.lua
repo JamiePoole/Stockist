@@ -25,8 +25,9 @@ IconButton.ICONS = {
     },
 }
 
-local NORMAL = { 0.85, 0.88, 0.92 }
-local HOVER = { 1, 0.82, 0 }
+-- A dim grey at rest so the icon does not outshine the text buttons beside it; gold when hovered.
+local NORMAL = { 0.55, 0.58, 0.63, 0.85 }
+local HOVER = { 1, 0.82, 0, 1 }
 
 function IconButton.Create(parent, opts)
     local segments = assert(IconButton.ICONS[opts.icon], "unknown icon '" .. tostring(opts.icon) .. "'")
@@ -42,7 +43,7 @@ function IconButton.Create(parent, opts)
         lines[i] = line
     end
     local function paint(color)
-        for _, line in ipairs(lines) do line:SetColorTexture(color[1], color[2], color[3], 1) end
+        for _, line in ipairs(lines) do line:SetColorTexture(color[1], color[2], color[3], color[4]) end
     end
     paint(NORMAL)
     b:HookScript("OnEnter", function() paint(HOVER) end)
