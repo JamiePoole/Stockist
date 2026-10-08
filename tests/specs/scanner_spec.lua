@@ -225,6 +225,81 @@ test("a request the server never answers is given up after 45 seconds, not left 
     eq(S.Scanner:Start(), true)
 end)
 
+test("a request the server ignored starts no wait of its own; we retry after a short, growing delay", function()
+    local S, frame, events, flush = setup({ { item = 10, count = 1, buyout = 100 } })
+    fire(frame, "AUCTION_HOUSE_SHOW")
+    flush() -- ignored: the watchdog gives up
+    is_nil(S.db.scan.requested, "the ignored request is forgotten, not counted as a 15-minute wait")
+    eq(S.db.scan.misses, 1)
+    eq(S.Scanner:SecondsUntilNextScan(), 120)
+    eq(events[#events][2]:find("Next scan in 2:00", 1, true) ~= nil, true, events[#events][2])
+    eq(S.Scanner:Start(), false, "too early")
+
+    S.Clock.now = function() return 100000 + 120 end
+    eq(S.Scanner:Start(), true)
+    flush() -- ignored again
+    eq(S.db.scan.misses, 2)
+    eq(S.Scanner:SecondsUntilNextScan(), 240)
+
+    S.Clock.now = function() return 100000 + 120 + 240 end
+    S.Scanner:Start(); flush()
+    eq(S.Scanner:SecondsUntilNextScan(), 480)
+    S.Clock.now = function() return 100000 + 120 + 240 + 480 end
+    S.Scanner:Start(); flush()
+    eq(S.Scanner:SecondsUntilNextScan(), 900, "capped at 15 minutes")
+    S.Clock.now = function() return 100000 + 120 + 240 + 480 + 900 end
+    S.Scanner:Start(); flush()
+    eq(S.Scanner:SecondsUntilNextScan(), 900, "stays at the cap")
+end)
+
+test("an answer ends the backoff", function()
+    local S, frame, _, flush = setup({ { item = 10, count = 1, buyout = 100 } })
+    fire(frame, "AUCTION_HOUSE_SHOW")
+    flush()
+    eq(S.db.scan.misses, 1)
+    S.Clock.now = function() return 100000 + 120 end
+    eq(S.Scanner:Start(), true)
+    S.Clock.now = function() return 100000 + 130 end
+    fire(frame, "REPLICATE_ITEM_LIST_UPDATE")
+    flush()
+    eq(S.db.scan.misses, 0)
+    is_nil(S.db.scan.retryAt)
+    eq(S.db.scan.last, 100000 + 130)
+end)
+
+test("force skips our own wait", function()
+    local S, frame, _, _, replicates = setup({ { item = 10, count = 1, buyout = 100 } })
+    S.db.scan.requested = 100000 - 60
+    fire(frame, "AUCTION_HOUSE_SHOW")
+    eq(replicates(), 0, "auto-scan respects the wait")
+    local ok = S.Scanner:Start()
+    eq(ok, false)
+    eq(S.Scanner:Start(true), true)
+    eq(replicates(), 1)
+end)
+
+test("recent requests are logged with whether the server answered", function()
+    local S, frame, _, flush = setup({ { item = 10, count = 1, buyout = 100 } })
+    fire(frame, "AUCTION_HOUSE_SHOW")
+    flush() -- ignored
+    S.Clock.now = function() return 100000 + 120 end
+    S.Scanner:Start()
+    S.Clock.now = function() return 100000 + 125 end
+    fire(frame, "REPLICATE_ITEM_LIST_UPDATE")
+    flush()
+    local log = S.db.scan.log
+    eq(#log, 2)
+    eq(log[1].answered, false)
+    eq(log[2].answered, true); eq(log[2].seconds, 5)
+    -- the log stays short
+    for i = 1, 20 do S.db.scan.log[#S.db.scan.log + 1] = { at = i } end
+    S.db.scan.requested = nil
+    S.Clock.now = function() return 100000 + 99999 end
+    S.Scanner.inProgress = false
+    S.Scanner:Start()
+    eq(#S.db.scan.log <= 10, true)
+end)
+
 test("the watchdog of an earlier scan never aborts a later one", function()
     local S, frame, events, flush = setup({ { item = 10, count = 1, buyout = 100 } })
     fire(frame, "AUCTION_HOUSE_SHOW")
