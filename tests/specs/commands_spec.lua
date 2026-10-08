@@ -3,7 +3,7 @@ local DAY = 86400
 -- Loads the command layer and the cleanup feature against a real store, capturing output.
 local function setup()
     local S = load_addon("Core/Config.lua", "Core/Clock.lua", "Core/EventBus.lua", "Core/Registry.lua",
-        "Core/Format.lua", "Core/Commands.lua", "Data/Rollup.lua", "Data/ReadingStore.lua",
+        "Core/Format.lua", "Core/ItemInfo.lua", "Core/Commands.lua", "Data/Rollup.lua", "Data/ReadingStore.lua",
         "Data/Retention.lua", "Data/Tracked.lua", "Features/DataCleanup.lua")
     local out = {}
     S.Print = function(msg) out[#out + 1] = msg end

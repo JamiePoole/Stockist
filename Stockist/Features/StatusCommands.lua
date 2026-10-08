@@ -11,8 +11,14 @@ local function itemName(id)
     return name or ("item:" .. id)
 end
 
+--- An item ID from plain digits ("2589") or an item link ("|Hitem:2589:...|h[Linen Cloth]|h"). Nil for
+--- anything else (words, 0, negatives, decimals, "1e3", hex), so bad input is reported, not guessed at.
 local function parseItemID(text)
-    return tonumber(text) or tonumber((text or ""):match("item:(%d+)"))
+    text = text or ""
+    local digits = text:match("^%s*(%d+)%s*$") or text:match("item:(%d+)")
+    local id = digits and tonumber(digits)
+    if id and id >= 1 and id < 2 ^ 31 then return id end
+    return nil
 end
 Stockist.ItemName = itemName
 Stockist.ParseItemID = parseItemID
@@ -28,8 +34,15 @@ local function richestItem()
 end
 
 local function chart(arg)
-    local id = arg ~= "" and parseItemID(arg) or richestItem()
-    if not id then return say("no data yet. Open the Auction House to take a reading, or give an item ID.") end
+    local id
+    if arg ~= "" then
+        id = parseItemID(arg)
+        if not id then return say("usage: /stockist chart [itemID or item link]") end
+    else
+        id = richestItem()
+        if not id then return say("no data yet. Open the Auction House to take a reading, or give an item ID.") end
+    end
+    -- An item that does not exist still opens the window, which then says so ("Item not found").
     Stockist.PriceChart.Show(id)
 end
 
@@ -51,8 +64,9 @@ end
 
 local function item(arg)
     local id = parseItemID(arg)
-    local last = id and Stockist.store:Latest(id)
     if not id then return say("usage: /stockist item <itemID or link>") end
+    if Stockist.ItemInfo.Exists(id) == false then return say(("no item has the ID %d."):format(id)) end
+    local last = Stockist.store:Latest(id)
     if not last then return say(itemName(id) .. ": no data yet.") end
     local now = Stockist.Clock.now()
     local line = ("%s: %s (low %s, %d listed, %s)"):format(
