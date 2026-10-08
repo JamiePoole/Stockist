@@ -28,6 +28,24 @@ function Help.SetTutorial(on)
     Stockist.Events:Fire("TUTORIAL_CHANGED", Help.TutorialEnabled())
 end
 
+-- Legend colours: white heading, gold labels, grey descriptions; the tips section is blue.
+local WHITE, GOLD, GREY, BLUE_HEAD, BLUE = "|cffffffff", "|cffffd100", "|cff9aa0a6", "|cff4da6ff", "|cff9fcdff"
+
+--- The chart legend as two colour-coded text blocks: (key, tips). Nil, nil if no legend is defined.
+function Help.Legend()
+    local L = Help.legend
+    if not L then return nil, nil end
+    local key = { WHITE .. L.keyTitle .. "|r" }
+    for _, entry in ipairs(L.key) do
+        key[#key + 1] = GOLD .. entry[1] .. "|r  " .. GREY .. entry[2] .. "|r"
+    end
+    local tips = { BLUE_HEAD .. L.tipsTitle .. "|r" }
+    for _, tip in ipairs(L.tips) do
+        tips[#tips + 1] = BLUE .. "- " .. tip .. "|r"
+    end
+    return table.concat(key, "\n"), table.concat(tips, "\n")
+end
+
 --- title, short, detail for a topic. `detail` is nil unless tutorial mode is on. Returns nil for
 --- an unknown key.
 function Help.Lines(key)

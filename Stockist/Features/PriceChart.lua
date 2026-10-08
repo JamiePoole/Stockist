@@ -30,7 +30,7 @@ PriceChart.TIMEFRAMES = TIMEFRAMES
 
 --- Help topics the window attaches to its widgets (checked by tests against Core/HelpTopics.lua).
 PriceChart.HELP_KEYS = {
-    "timeframe-1D", "timeframe-1W", "timeframe-1M", "sma", "bollinger", "tutorial", "legend",
+    "timeframe-1D", "timeframe-1W", "timeframe-1M", "sma", "bollinger", "tutorial",
 }
 
 local function timeframe(key)
@@ -185,7 +185,7 @@ end
 ---------------------------------------------------------------------------------------------------
 
 local state = { itemID = nil, timeframe = "1D", indicators = { sma = true, bollinger = false } }
-local win, chart, nameText, nameHit, priceText, metaText, legend, tfButtons, toggleButtons
+local win, chart, nameText, nameHit, priceText, metaText, legendKey, legendTips, tfButtons, toggleButtons
 
 local available = {} -- indicator availability for the chart on screen, set by refresh
 
@@ -196,7 +196,23 @@ local function paintToggle(btn, on, enabled)
     else fs:SetTextColor(1, 0.82, 0) end
 end
 
-local LEGEND_HEIGHT = 30
+local LEGEND_GAP = 12 -- empty space between the chart and the legend below it
+
+--- Size the chart to leave room for the legend (tutorial mode) under it, whose height follows its text.
+local function layoutChart()
+    local tutorial = Stockist.Help.TutorialEnabled()
+    legendKey:SetShown(tutorial)
+    legendTips:SetShown(tutorial)
+    local legendHeight = 0
+    if tutorial then
+        -- Before the first layout pass the width is 0 and the measured height is not meaningful.
+        local known = legendKey:GetWidth() > 1
+        legendHeight = known and math.max(legendKey:GetStringHeight(), legendTips:GetStringHeight()) or 110
+    end
+    chart.frame:ClearAllPoints()
+    chart.frame:SetPoint("TOPLEFT", win.content, "TOPLEFT", 0, -28)
+    chart.frame:SetPoint("BOTTOMRIGHT", win.content, "BOTTOMRIGHT", 0, tutorial and (legendHeight + LEGEND_GAP) or 0)
+end
 
 local function refresh()
     if not (win and state.itemID and Stockist.store) then return end
@@ -221,13 +237,10 @@ local function refresh()
     end
 
     -- The legend under the chart is part of tutorial mode (toggled from the window header).
-    local tutorial = Stockist.Help.TutorialEnabled()
-    local _, short, detail = Stockist.Help.Lines("legend")
-    legend:SetText((short or "") .. (detail and ("\n" .. detail) or ""))
-    legend:SetShown(tutorial)
-    chart.frame:ClearAllPoints()
-    chart.frame:SetPoint("TOPLEFT", win.content, "TOPLEFT", 0, -28)
-    chart.frame:SetPoint("BOTTOMRIGHT", win.content, "BOTTOMRIGHT", 0, tutorial and LEGEND_HEIGHT + 4 or 0)
+    local key, tips = Stockist.Help.Legend()
+    legendKey:SetText(key or "")
+    legendTips:SetText(tips or "")
+    layoutChart()
 end
 
 local function button(parent, text, width, helpKey, extra)
@@ -259,7 +272,9 @@ local function showItemTooltip(owner, itemID)
 end
 
 local function createWindow()
-    win = Stockist.UI.Window.Create({ name = "StockistChartWindow", title = "Stockist", width = 680, height = 440 })
+    win = Stockist.UI.Window.Create({
+        name = "StockistChartWindow", title = "Stockist", width = 680, height = 520, minWidth = 520, minHeight = 420,
+    })
     local content = win.content
 
     -- Header, left to right: item name (hover for its tooltip), price, 24h change and age.
@@ -308,12 +323,23 @@ local function createWindow()
 
     chart = Stockist.Charts.Create(content, { series = {} })
 
-    legend = content:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    legend:SetPoint("BOTTOMLEFT", 2, 0)
-    legend:SetPoint("BOTTOMRIGHT", -2, 0)
-    legend:SetJustifyH("LEFT")
-    legend:SetTextColor(0.6, 0.65, 0.72)
-    legend:SetWordWrap(true)
+    -- Legend: the key on the left, "what to look for" (blue) on the right. The text carries its own
+    -- colours, so the font strings are plain white by default.
+    -- Each column runs from `leftAnchor` (with offset leftX) to `rightAnchor` (offset rightX) along the bottom.
+    local function legendColumn(leftAnchor, leftX, rightAnchor, rightX)
+        local fs = content:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        fs:SetPoint("BOTTOMLEFT", content, leftAnchor, leftX, 0)
+        fs:SetPoint("BOTTOMRIGHT", content, rightAnchor, rightX, 0)
+        fs:SetJustifyH("LEFT")
+        fs:SetJustifyV("BOTTOM")
+        fs:SetTextColor(1, 1, 1)
+        fs:SetWordWrap(true)
+        return fs
+    end
+    legendKey = legendColumn("BOTTOMLEFT", 2, "BOTTOM", -10)
+    legendTips = legendColumn("BOTTOM", 10, "BOTTOMRIGHT", -2)
+    -- The legend's height depends on its width, so make room for it again whenever the window resizes.
+    content:SetScript("OnSizeChanged", function() if state.itemID then layoutChart() end end)
 
     -- Item names arrive from the server a moment after the first request.
     local loader = CreateFrame("Frame")

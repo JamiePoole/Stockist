@@ -27,9 +27,22 @@ R("tutorial", "Tutorial tips", "Turns the longer explanations on or off.",
     "When on, buttons and the chart show plain-language descriptions of what each thing means. "
     .. "Turn it off once you know your way around.")
 
-R("legend", "Reading the chart",
-    "Candle: thick part = first to last price, thin line = lowest to highest. Green = price rose, red = fell. "
-    .. "Bars below = how many are listed for sale.",
-    "A candle with a single reading is just a flat dash; it grows as more scans land in the same hour. "
-    .. "If you cannot see a thin line sticking out, the price never went past the thick part: the "
-    .. "bright line down the middle of the thick part is the thin line.")
+-- The legend under the price chart (shown in tutorial mode): a key, and some general things to look
+-- for. The tips are hints about how to read a chart, not advice about what to buy or sell.
+Stockist.Help.legend = {
+    keyTitle = "Reading the chart",
+    key = {
+        { "Thick part", "first to last price in that period" },
+        { "Thin line", "lowest to highest price (a bright line through the middle if the price stayed inside the thick part)" },
+        { "Green / red", "the price ended higher / lower than it started" },
+        { "Dots and line", "used while history is short: one dot per scan" },
+        { "Lower bars", "how many units are listed for sale" },
+    },
+    tipsTitle = "What to look for",
+    tips = {
+        "A thick candle: the price moved decisively (up if green, down if red).",
+        "A long thin line: the price swung widely but came back, so the market is unsettled.",
+        "Price rising while few are listed: buyers outnumber sellers. Falling while many are listed: sellers are undercutting each other.",
+        "Hints, not advice: patches and events can move prices in ways no chart shows.",
+    },
+}

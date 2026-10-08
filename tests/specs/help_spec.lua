@@ -48,6 +48,45 @@ test("every topic has a title and a one-line description", function()
     end
 end)
 
+-- Legend ---------------------------------------------------------------------------------------
+
+test("the legend is two colour-coded blocks: a key and blue tips", function()
+    local S = ns()
+    local key, tips = S.Help.Legend()
+    eq(type(key), "string"); eq(type(tips), "string")
+    -- key: white heading, gold labels, grey descriptions
+    eq(key:find("|cffffffffReading the chart|r", 1, true) ~= nil, true, "white heading")
+    eq(key:find("|cffffd100Thick part|r", 1, true) ~= nil, true, "gold label")
+    eq(key:find("|cff9aa0a6first to last price in that period|r", 1, true) ~= nil, true, "grey description")
+    -- tips: blue heading and blue text
+    eq(tips:find("|cff4da6ffWhat to look for|r", 1, true) ~= nil, true, "blue heading")
+    eq(tips:find("|cff9fcdff- ", 1, true) ~= nil, true, "blue tips")
+    -- every colour escape is closed
+    for _, block in ipairs({ key, tips }) do
+        local _, opens = block:gsub("|cff", "")
+        local _, closes = block:gsub("|r", "")
+        eq(opens, closes, "balanced colour codes")
+    end
+end)
+
+test("the legend has a line per key entry and per tip", function()
+    local S = ns()
+    local key, tips = S.Help.Legend()
+    local function lines(s) local n = 0 for _ in (s .. "\n"):gmatch("([^\n]*)\n") do n = n + 1 end return n end
+    eq(lines(key), 1 + #S.Help.legend.key)
+    eq(lines(tips), 1 + #S.Help.legend.tips)
+end)
+
+test("the tips are hints about reading a chart, not instructions to buy or sell", function()
+    local S = ns()
+    local _, tips = S.Help.Legend()
+    local lower = tips:lower()
+    eq(lower:find("not advice", 1, true) ~= nil, true, "says it is not advice")
+    for _, banned in ipairs({ "you should", "must sell", "must buy", "do not sell", "don't sell", "buy now", "sell now" }) do
+        eq(lower:find(banned, 1, true), nil, "no instruction: " .. banned)
+    end
+end)
+
 -- Item names ----------------------------------------------------------------------------------
 
 test("Format.ColorCode and Colored", function()
