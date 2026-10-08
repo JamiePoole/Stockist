@@ -1,0 +1,12 @@
+# Keep source files LF on every machine so Windows checkouts do not rewrite them to CRLF.
+* text=auto eol=lf
+
+# Game art and archives are never line-ending converted.
+*.png binary
+*.jpg binary
+*.tga binary
+*.blp binary
+*.ogg binary
+*.mp3 binary
+*.ttf binary
+*.zip binary
