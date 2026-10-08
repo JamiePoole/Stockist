@@ -23,6 +23,7 @@ local function trackedMethods()
         IsEnabled = function(self) return self.enabled end,
         SetAlpha = function(self, a) self.alpha = a end,
         SetColorTexture = function(self, r, g, b, a) self.color = { r, g, b, a } end,
+        SetTextColor = function(self, r, g, b, a) self.textColor = { r, g, b, a } end,
         SetStartPoint = function(self, ...) self.startPoint = { ... } end,
         SetEndPoint = function(self, ...) self.endPoint = { ... } end,
         SetScript = function(self, name, fn) self.scripts[name] = fn end,
@@ -61,6 +62,15 @@ local function trackedMethods()
             self.fontString = self.fontString or Fake.new("FontString", self)
             return self.fontString
         end,
+        GetHighlightTexture = function(self)
+            self.highlightTexture = self.highlightTexture or Fake.new("Texture", self)
+            return self.highlightTexture
+        end,
+        GetPushedTexture = function(self)
+            self.pushedTexture = self.pushedTexture or Fake.new("Texture", self)
+            return self.pushedTexture
+        end,
+        GetAlpha = function(self) return self.alpha or 1 end,
         CreateFontString = function(self) return Fake.new("FontString", self) end,
         CreateTexture = function(self) return Fake.new("Texture", self) end,
         CreateLine = function(self) return Fake.new("Line", self) end,

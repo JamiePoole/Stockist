@@ -10,7 +10,7 @@ local FILES = {
     "UI/Charts/Scale.lua", "UI/Charts/Formatters.lua", "UI/Charts/Theme.lua", "UI/Charts/Series/Line.lua",
     "UI/Charts/Series/Candle.lua", "UI/Charts/Series/Bar.lua", "UI/Charts/Overlays/Overlays.lua",
     "UI/Charts/Core.lua", "UI/Charts/FrameCanvas.lua", "UI/Charts/ChartFrame.lua", "UI/Kit/Tooltip.lua",
-    "UI/Kit/IconButton.lua", "UI/Kit/Window.lua", "Features/PriceChart.lua", "Features/ChartPanel.lua",
+    "UI/Kit/Button.lua", "UI/Kit/IconButton.lua", "UI/Kit/Window.lua", "Features/PriceChart.lua", "Features/ChartPanel.lua",
 }
 
 --- A fresh addon with the fake client installed. Item 7 has two days of hourly history, item 8 only
@@ -66,14 +66,68 @@ test("the scope buttons change the chart and show the chosen one as pressed", fu
     local panel = S.ChartPanel.Create(UIParent)
     panel:SetItem(7)
     local dayRange = panel.chart.config.x.range
-    eq(panel.tfButtons["1D"].enabled, false, "1D is selected at first")
-    eq(panel.tfButtons["1W"].enabled, true)
+    local Button = S.UI.Button
+    eq(Button.IsSelected(panel.tfButtons["1D"]), true, "1D is the active scope at first")
+    eq(Button.IsSelected(panel.tfButtons["1W"]), false)
 
     Fake.fire(panel.tfButtons["1W"], "OnClick")
     eq(panel.state.timeframe, "1W")
-    eq(panel.tfButtons["1W"].enabled, false); eq(panel.tfButtons["1D"].enabled, true)
+    eq(Button.IsSelected(panel.tfButtons["1W"]), true); eq(Button.IsSelected(panel.tfButtons["1D"]), false)
     local weekRange = panel.chart.config.x.range
     eq(weekRange[2] - weekRange[1] > dayRange[2] - dayRange[1], true, "a wider window")
+    Fake.uninstall()
+end)
+
+test("the active scope looks selected, not disabled: blue, white text, no hover or press, tooltip kept", function()
+    local S = setup()
+    local panel = S.ChartPanel.Create(UIParent)
+    panel:SetItem(7)
+    local active, other = panel.tfButtons["1D"], panel.tfButtons["1W"]
+
+    eq(active.enabled, true, "still enabled, so its tooltip works")
+    eq(active.selectedFill.shown, true, "blue fill")
+    eq(active.selectedFill.color[3] > active.selectedFill.color[1], true, "the fill is blue")
+    local text = active:GetFontString().textColor
+    eq(text[1] == 1 and text[2] == 1 and text[3] == 1, true, "white text on the blue fill")
+    eq(active:GetHighlightTexture().alpha, 0, "no hover effect")
+    eq(active:GetPushedTexture().alpha, 0, "no pressed effect")
+
+    eq(other.enabled, true)
+    eq(other.selectedFill.shown, false, "inactive scopes have no fill")
+    local gold = other:GetFontString().textColor
+    eq(gold[1] == 1 and gold[2] == 0.82 and gold[3] == 0, true, "inactive scopes keep the normal gold text")
+    eq(other:GetHighlightTexture().alpha, 1, "inactive scopes keep their hover effect")
+    eq(other:GetPushedTexture().alpha, 1)
+    Fake.uninstall()
+end)
+
+test("clicking the active scope does nothing, and the highlight moves when the scope changes", function()
+    local S = setup()
+    local panel = S.ChartPanel.Create(UIParent)
+    panel:SetItem(7)
+    local drawn = panel.chart.config
+    Fake.fire(panel.tfButtons["1D"], "OnClick")
+    eq(panel.chart.config, drawn, "no redraw for a click on the active scope")
+
+    Fake.fire(panel.tfButtons["1M"], "OnClick")
+    eq(panel.tfButtons["1M"].selectedFill.shown, true)
+    eq(panel.tfButtons["1D"].selectedFill.shown, false, "the old one is released")
+    eq(panel.tfButtons["1D"]:GetHighlightTexture().alpha, 1, "and gets its hover effect back")
+    Fake.uninstall()
+end)
+
+test("scope buttons go back to normal when a message replaces the chart", function()
+    local S = setup()
+    local panel = S.ChartPanel.Create(UIParent)
+    panel:SetItem(7)
+    panel:SetItem(9)
+    for key, btn in pairs(panel.tfButtons) do
+        eq(btn.enabled, false, key .. " is unavailable while there is nothing to chart")
+        eq(btn.selectedFill.shown, false, key .. " is not shown as selected")
+    end
+    panel:SetItem(7)
+    for key, btn in pairs(panel.tfButtons) do eq(btn.enabled, true, key .. " is usable again") end
+    eq(panel.tfButtons["1D"].selectedFill.shown, true)
     Fake.uninstall()
 end)
 
@@ -182,7 +236,7 @@ test("panels register themselves by name for the workspace", function()
     eq(type.create, S.ChartPanel.Create)
     local panel = type.create(UIParent, { itemID = 7, timeframe = "1W" })
     eq(panel:GetItem(), 7)
-    eq(panel.tfButtons["1W"].enabled, false, "starts on the requested scope")
+    eq(S.UI.Button.IsSelected(panel.tfButtons["1W"]), true, "starts on the requested scope")
     Fake.uninstall()
 end)
 
