@@ -22,7 +22,7 @@ local function setup()
     S.Clock.now = function() return NOON end
     S.db = { scan = {} }
     S.store = S.ReadingStore.New(S.db)
-    for h = 0, 47 do
+    for h = 47, 0, -1 do -- oldest first: scans arrive in time order
         S.store:Add({ item = 7, ts = NOON - h * HOUR, price = 2000 - h * 10, qty = 40 })
         S.store:Add({ item = 8, ts = NOON - h * HOUR, price = 500 + h * 5, qty = 40 })
     end
@@ -228,5 +228,59 @@ test("the workspace now builds a real watchlist in its first cell", function()
     end
     eq(placeholder, nil, "no placeholder: both panel types exist")
     eq(S.Link.Get("A"), 7)
+    Fake.uninstall()
+end)
+
+-- Change since the previous scan --------------------------------------------------------------------
+
+test("the move since the previous scan is the last two readings, and nil without two", function()
+    local S = setup()
+    local pct = S.store:ScanChange(7)
+    near(pct, (2000 - 1990) / 1990 * 100, 1e-9)
+    eq(S.store:ScanChange(8) < 0, true, "item 8 fell on the latest scan")
+    eq(S.store:ScanChange(9), nil, "no readings")
+    S.store:Add({ item = 10, ts = NOON, price = 100, qty = 1 })
+    eq(S.store:ScanChange(10), nil, "only one scan")
+    Fake.uninstall()
+end)
+
+test("Format.Change is coloured by direction and empty for nothing", function()
+    local S = setup()
+    eq(S.Format.Change(nil), "")
+    eq(S.Format.Change(1.5):find("+1.50%", 1, true) ~= nil, true)
+    eq(S.Format.Change(1.5):find("|cff33c773", 1, true) ~= nil, true, "green")
+    eq(S.Format.Change(-1.5):find("|cffeb4d4d", 1, true) ~= nil, true, "red")
+    eq(S.Format.Change(0):find("|cff999999", 1, true) ~= nil, true, "grey")
+    Fake.uninstall()
+end)
+
+test("each watchlist row shows the scan move beside the price and the 24h move after it", function()
+    local S = setup()
+    local panel = panelFor(S)
+    local row = shownRows(panel)[1] -- item 7
+    eq(row.scan.text:find("+0.50%", 1, true) ~= nil, true, row.scan.text)
+    eq(row.change.text:find("24h", 1, true) ~= nil, true)
+    eq(shownRows(panel)[3].scan.text, "", "no data: no move shown")
+    Fake.uninstall()
+end)
+
+test("the price line in a row is static: no cursor, crosshair or tooltip", function()
+    local S = setup()
+    local panel = panelFor(S)
+    local spark = shownRows(panel)[1].spark
+    eq(spark.config.static, true)
+    local hovered = 0
+    local real = S.Charts.Hover
+    S.Charts.Hover = function(...) hovered = hovered + 1 end
+    spark.CursorPosition = function() return 5, 5 end -- as if the mouse were over it
+    Fake.fire(spark.frame, "OnUpdate")
+    eq(hovered, 0, "static charts never draw a hover")
+    -- the same cursor on a normal chart does
+    local normal = S.Charts.Create(UIParent, { series = { { type = "line", points = { { x = 1, y = 1 }, { x = 2, y = 2 } } } } })
+    normal.frame:SetSize(100, 50)
+    normal.CursorPosition = function() return 5, 5 end
+    Fake.fire(normal.frame, "OnUpdate")
+    eq(hovered > 0, true, "a normal chart does")
+    S.Charts.Hover = real
     Fake.uninstall()
 end)

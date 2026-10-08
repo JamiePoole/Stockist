@@ -71,8 +71,15 @@ function ChartPanel.Create(parent, opts)
 
     self.priceText = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     self.priceText:SetPoint("LEFT", self.nameText, "RIGHT", 12, 0)
+    -- The move since the previous scan sits right beside the price; hover it for what it means.
+    self.scanText = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    self.scanText:SetPoint("LEFT", self.priceText, "RIGHT", 8, 0)
+    self.scanHit = CreateFrame("Frame", nil, frame)
+    self.scanHit:SetAllPoints(self.scanText)
+    self.scanHit:EnableMouse(true)
+    Stockist.UI.Tooltip.Attach(self.scanHit, "change-scan")
     self.metaText = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    self.metaText:SetPoint("LEFT", self.priceText, "RIGHT", 12, 0)
+    self.metaText:SetPoint("LEFT", self.scanText, "RIGHT", 12, 0)
 
     -- Controls, right to left: pop out | time scope buttons | divider | chart overlays.
     local prev
@@ -225,6 +232,7 @@ function ChartPanel:ShowStatus(status)
     end
     self.nameHit:SetSize(math.max(1, self.nameText:GetStringWidth()), math.max(1, self.nameText:GetStringHeight()))
     self.priceText:SetText("")
+    self.scanText:SetText("")
 
     local Tooltip = Stockist.UI.Tooltip
     for _, btn in pairs(self.tfButtons) do
@@ -276,6 +284,7 @@ function ChartPanel:Refresh()
     self.nameHit:SetSize(math.max(1, self.nameText:GetStringWidth()), math.max(1, self.nameText:GetStringHeight()))
     local parts = PriceChart.HeaderParts(Stockist.store, state.itemID, now)
     self.priceText:SetText(parts and Format.MoneyDisplay(parts.price) or "")
+    self.scanText:SetText(parts and Format.Change(parts.scan) or "")
     self.metaText:SetText(parts and PriceChart.MetaText(parts) or "no data yet")
 
     local Tooltip = Stockist.UI.Tooltip

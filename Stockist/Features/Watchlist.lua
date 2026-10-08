@@ -44,7 +44,7 @@ function Watchlist.SparkConfig(points)
         colour = last > first and UP or (last < first and DOWN or FLAT)
     end
     return {
-        minimal = true, transparent = true,
+        minimal = true, transparent = true, static = true, -- a glance, not a chart: no cursor or tooltip
         series = { { type = "line", id = "price", points = #points >= 2 and points or {}, color = colour, width = 1.25 } },
     }
 end
@@ -59,6 +59,7 @@ function Watchlist.Rows(store, ids, now, nameOf)
             id = id,
             name = nameOf(id),
             price = last and last.price or nil,
+            scan = last and store:ScanChange(id) or nil,
             change = last and store:Change(id, 86400, now) or nil,
             age = last and (now - last.ts) or nil,
             spark = last and sparkPoints(store, id, now) or {},
@@ -76,11 +77,6 @@ end
 function Watchlist.Capacity(height, count)
     local fit = math.max(1, math.floor(height / ROW_HEIGHT))
     return fit, math.max(0, count - fit)
-end
-
-local function changeColour(change)
-    if not change or change == 0 then return FLAT end
-    return change > 0 and UP or DOWN
 end
 
 ---------------------------------------------------------------------------------------------------
@@ -116,8 +112,10 @@ local function buildRow(self, parent)
     row.name:SetWordWrap(false)
     row.price = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     row.price:SetPoint("BOTTOMLEFT", 8, 5)
-    row.change = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    row.change:SetPoint("LEFT", row.price, "RIGHT", 8, 0)
+    row.scan = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall") -- move since the last scan, beside the price
+    row.scan:SetPoint("LEFT", row.price, "RIGHT", 6, 0)
+    row.change = row:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall") -- 24h, quieter
+    row.change:SetPoint("LEFT", row.scan, "RIGHT", 6, 0)
 
     row:SetScript("OnEnter", function(r)
         r.hoverBg:Show()
@@ -254,8 +252,8 @@ function Watchlist:Refresh()
                 row.itemID = data.id
                 row.name:SetText(Stockist.ItemInfo.ColoredName(data.id))
                 row.price:SetText(data.price and Format.MoneyDisplay(data.price) or "no data yet")
-                local c = changeColour(data.change)
-                row.change:SetText(data.change and Format.Colored(Format.Percent(data.change), c[1], c[2], c[3]) or "")
+                row.scan:SetText(Format.Change(data.scan))
+                row.change:SetText(data.change and (Format.Change(data.change) .. " 24h") or "")
                 row.spark:SetConfig(Watchlist.SparkConfig(data.spark))
                 row.selectedBg:SetShown(data.id == selected)
                 row:Show()

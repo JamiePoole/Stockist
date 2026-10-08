@@ -35,6 +35,10 @@ R("watchlist-track", "Track this item", "Adds the item shown in the chart to you
     "Tracked items are kept in this list and their price history is stored for longer, so you can see "
     .. "slow trends. Items you do not track are cleaned up after a while.")
 
+R("change-scan", "Change since the last scan", "How much the price moved between the two most recent scans of the Auction House.",
+    "Green is up, red is down. It is the quickest way to see whether something just moved. Scans are "
+    .. "at least 15 minutes apart, so this is a short-term move; the 24h figure beside it is the bigger picture.")
+
 R("tutorial", "Tutorial tips", "Turns the longer explanations on or off.",
     "When on, buttons and the chart show plain-language descriptions of what each thing means. "
     .. "Turn it off once you know your way around.")

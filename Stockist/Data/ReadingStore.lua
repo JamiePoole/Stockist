@@ -190,6 +190,15 @@ function Store:PriceAt(itemID, ts)
     return bestPrice
 end
 
+--- Percent change of the latest scan's price versus the scan before it. Nil with fewer than two
+--- scans kept (only the last day of scans is) or a zero earlier price.
+function Store:ScanChange(itemID)
+    local it = self.db.items[itemID]
+    local n = it and it.tp and #it.tp or 0
+    if n < 2 or it.tp[n - 1] == 0 then return nil end
+    return (it.tp[n] - it.tp[n - 1]) / it.tp[n - 1] * 100
+end
+
 --- Percent change of the latest price versus the price `windowSec` before `now`.
 --- Returns percent, referencePrice; nil if there is no latest reading or no data that old.
 function Store:Change(itemID, windowSec, now)

@@ -30,7 +30,7 @@ PriceChart.TIMEFRAMES = TIMEFRAMES
 
 --- Help topics the window attaches to its widgets (checked by tests against Core/HelpTopics.lua).
 PriceChart.HELP_KEYS = {
-    "timeframe-1D", "timeframe-1W", "timeframe-1M", "sma", "bollinger", "tutorial",
+    "timeframe-1D", "timeframe-1W", "timeframe-1M", "sma", "bollinger", "tutorial", "change-scan",
 }
 
 local function timeframe(key)
@@ -181,7 +181,10 @@ end
 function PriceChart.HeaderParts(store, itemID, now)
     local last = store:Latest(itemID)
     if not last then return nil end
-    return { price = last.price, min = last.min, change = store:Change(itemID, 86400, now), age = now - last.ts }
+    return {
+        price = last.price, min = last.min, change = store:Change(itemID, 86400, now),
+        scan = store:ScanChange(itemID), age = now - last.ts,
+    }
 end
 
 --- Plain one-line summary: "Linen Cloth  1g 20s (24h +3.10%)  updated 12m ago". `name` may carry colour codes.
@@ -196,11 +199,7 @@ end
 --- The text after the price: "+3.10% 24h  updated 12m ago", the change coloured green or red.
 function PriceChart.MetaText(parts)
     local pieces = {}
-    if parts.change then
-        local r, g, b = 0.6, 0.6, 0.6
-        if parts.change > 0 then r, g, b = 0.2, 0.78, 0.45 elseif parts.change < 0 then r, g, b = 0.92, 0.3, 0.3 end
-        pieces[#pieces + 1] = Format.Colored(Format.Percent(parts.change), r, g, b) .. " 24h"
-    end
+    if parts.change then pieces[#pieces + 1] = Format.Change(parts.change) .. " 24h" end
     pieces[#pieces + 1] = "updated " .. Format.Age(parts.age)
     return table.concat(pieces, "   ")
 end
