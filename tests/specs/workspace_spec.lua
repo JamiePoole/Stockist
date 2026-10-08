@@ -216,6 +216,20 @@ test("cells are laid out when the window opens, and again on the next frame and 
     Fake.uninstall()
 end)
 
+test("windows are top-level and raise themselves when shown, so a pop-out sits over the workspace", function()
+    local S = setup()
+    S.Workspace.Show(7)
+    S.PriceChart.Show(7)
+    for _, name in ipairs({ "StockistWorkspace", "StockistChartWindow" }) do
+        local win = _G[name]
+        eq(Fake.called(win, "SetToplevel"), true, name .. " is top-level")
+        eq(Fake.called(win, "Raise"), false, "nothing raised yet in the stand-in client")
+        Fake.fire(win, "OnShow")
+        eq(Fake.called(win, "Raise"), true, name .. " raises itself when shown")
+    end
+    Fake.uninstall()
+end)
+
 -- Command -----------------------------------------------------------------------------------------
 
 test("/stockist workspace opens it, with an optional item, and rejects a bad argument", function()

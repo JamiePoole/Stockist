@@ -45,6 +45,12 @@ function Window.Create(opts)
     frame:SetBackdropColor(0.04, 0.05, 0.07, 0.96)
     frame:SetBackdropBorderColor(1, 1, 1, 0.15)
     frame:SetFrameStrata("HIGH")
+    -- Overlapping windows: what draws on top is decided by frame level, and a window's children sit above
+    -- its own background. Without this, the child frames of an older window (a chart, say) are drawn over
+    -- the background of a newer one. Top-level windows are raised whole, children included, when clicked,
+    -- and we raise a window as it opens so it starts on top.
+    frame:SetToplevel(true)
+    frame:HookScript("OnShow", function(self) self:Raise() end)
     frame:SetClampedToScreen(true)
     frame:EnableMouse(true) -- the whole window is solid: clicks on empty areas must not reach the world behind
     frame:SetMovable(true)
