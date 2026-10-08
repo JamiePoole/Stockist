@@ -37,6 +37,33 @@ function Scanner:Start()
     return true
 end
 
+--- Auto-scan is on unless the player turned it off (account-wide setting).
+function Scanner:AutoEnabled()
+    local setting = Stockist.settings and Stockist.settings.autoScan
+    if setting == nil then return Stockist.Config.scan.autoOnOpen end
+    return setting
+end
+
+local WATCH_INTERVAL = 30 -- seconds between "is a scan due?" checks while the window is open
+
+--- While the Auction House stays open, start the next scan as soon as the throttle allows.
+function Scanner:StartWatching()
+    if self.ticker then return end
+    self.ticker = C_Timer.NewTicker(WATCH_INTERVAL, function()
+        if not self.ahOpen then return self:StopWatching() end
+        if self:AutoEnabled() and not self.inProgress and self:SecondsUntilNextScan() == 0 then
+            self:Start()
+        end
+    end)
+end
+
+function Scanner:StopWatching()
+    if self.ticker then
+        self.ticker:Cancel()
+        self.ticker = nil
+    end
+end
+
 function Scanner:Abort(reason)
     if not self.inProgress then return end
     self.inProgress = false
@@ -122,12 +149,16 @@ frame:SetScript("OnEvent", function(_, event)
     if event == "AUCTION_HOUSE_SHOW" then
         Scanner.ahOpen = true
         Stockist.Events:Fire("AH_OPENED")
-        if Stockist.Config.scan.autoOnOpen and Stockist.db then
-            local ok, reason = Scanner:Start()
-            if not ok then Stockist.Events:Fire("SCAN_SKIPPED", reason) end
+        if Stockist.db then
+            Scanner:StartWatching()
+            if Scanner:AutoEnabled() then
+                local ok, reason = Scanner:Start()
+                if not ok then Stockist.Events:Fire("SCAN_SKIPPED", reason) end
+            end
         end
     elseif event == "AUCTION_HOUSE_CLOSED" then
         Scanner.ahOpen = false
+        Scanner:StopWatching()
         Stockist.Events:Fire("AH_CLOSED")
         Scanner:Abort("Auction House closed during the scan")
     elseif event == "REPLICATE_ITEM_LIST_UPDATE" then

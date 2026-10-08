@@ -15,7 +15,16 @@ local function setup(auctions, opts)
         }
         return frame
     end
-    C_Timer = { After = function(_, fn) timers[#timers + 1] = fn end }
+    local tickers = {}
+    C_Timer = {
+        After = function(_, fn) timers[#timers + 1] = fn end,
+        NewTicker = function(interval, fn)
+            local t = { interval = interval, fn = fn, cancelled = false }
+            t.Cancel = function(self) self.cancelled = true end
+            tickers[#tickers + 1] = t
+            return t
+        end,
+    }
     C_Item = {
         GetItemInfoInstant = function(id)
             local class = opts.classes and opts.classes[id] or 7
@@ -51,7 +60,7 @@ local function setup(auctions, opts)
         end
     end
 
-    return S, frame, events, flush, function() return replicateCalls end
+    return S, frame, events, flush, function() return replicateCalls end, tickers
 end
 
 local function fire(frame, event) frame.onEvent(frame, event) end
@@ -119,6 +128,52 @@ test("a second scan inside the throttle window is refused", function()
     S.Clock.now = function() return 100000 + 15 * 60 + 1 end
     fire(frame, "AUCTION_HOUSE_SHOW")
     eq(replicates(), 2)
+end)
+
+test("an open Auction House re-scans once the throttle has passed", function()
+    local S, frame, _, flush, replicates, tickers = setup({ { item = 10, count = 1, buyout = 100 } })
+    fire(frame, "AUCTION_HOUSE_SHOW")
+    fire(frame, "REPLICATE_ITEM_LIST_UPDATE")
+    flush()
+    eq(replicates(), 1)
+    eq(#tickers, 1)
+    eq(tickers[1].interval, 30)
+
+    S.Clock.now = function() return 100000 + 5 * 60 end
+    tickers[1].fn()
+    eq(replicates(), 1, "too soon: still throttled")
+
+    S.Clock.now = function() return 100000 + 15 * 60 end
+    tickers[1].fn()
+    eq(replicates(), 2, "due: scans again")
+
+    tickers[1].fn()
+    eq(replicates(), 2, "a scan in progress is not doubled")
+end)
+
+test("the watcher stops when the window closes and is not duplicated on reopen", function()
+    local S, frame, _, _, _, tickers = setup({ { item = 10, count = 1, buyout = 100 } })
+    fire(frame, "AUCTION_HOUSE_SHOW")
+    fire(frame, "AUCTION_HOUSE_SHOW")
+    eq(#tickers, 1, "one ticker")
+    fire(frame, "AUCTION_HOUSE_CLOSED")
+    eq(tickers[1].cancelled, true)
+    fire(frame, "AUCTION_HOUSE_SHOW")
+    eq(#tickers, 2, "a fresh ticker after reopening")
+end)
+
+test("auto-scan off: no scan on open or on tick", function()
+    local S, frame, _, _, replicates, tickers = setup({ { item = 10, count = 1, buyout = 100 } })
+    S.settings = { autoScan = false }
+    fire(frame, "AUCTION_HOUSE_SHOW")
+    S.Clock.now = function() return 100000 + 3600 end
+    tickers[1].fn()
+    eq(replicates(), 0)
+    eq(S.Scanner:AutoEnabled(), false)
+    -- a manual scan still works
+    local ok = S.Scanner:Start()
+    eq(ok, true)
+    eq(replicates(), 1)
 end)
 
 test("closing the Auction House mid-scan aborts it", function()

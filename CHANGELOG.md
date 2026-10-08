@@ -5,5 +5,6 @@
 - Core: event bus, plugin registry, config, clock, formatting.
 - Data: OHLC rollups, indicators (SMA, EMA, Bollinger, RSI), reading store with retention.
 - Market: Auction House full-scan adapter, price aggregation (min, median of cheapest units, supply).
-- Chat commands: `/stockist` (status, scan, item, movers).
+- Chat commands: `/stockist` (status, scan, item, movers, auto).
+- Re-scans automatically every 15 minutes while the Auction House stays open (`/stockist auto off` to disable).
 - Unit tests under Lua 5.1 (`scripts/test.ps1`).
