@@ -5,7 +5,8 @@ local Util = Charts.Util
 
 local BODY_ALPHA = 0.55
 
--- spec: { type = "candle", points = { {x, o, h, l, c}... }, barWidth? (pixels), label? }
+-- spec: { type = "candle", points = { {x, o, h, l, c, n?}... }, barWidth? (pixels), label? }
+-- `n` (optional) is how many readings the candle summarises; the hover tooltip shows it.
 -- Up candles (close >= open) use the theme's `up` colour, down candles `down`.
 Charts.series:Register("candle", {
     extent = function(spec)
@@ -43,15 +44,16 @@ Charts.series:Register("candle", {
         local p = spec.points[i]
         local up = p.c >= p.o
         local color = up and ctx.theme.up or ctx.theme.down
-        return {
-            x = p.x,
-            y = ctx.ys:Map(p.c),
-            rows = {
-                { text = "open " .. ctx.format(p.o), color = color },
-                { text = "high " .. ctx.format(p.h), color = color },
-                { text = "low " .. ctx.format(p.l), color = color },
-                { text = "close " .. ctx.format(p.c), color = color },
-            },
+        local rows = {
+            { text = "open " .. ctx.format(p.o), color = color },
+            { text = "high " .. ctx.format(p.h), color = color },
+            { text = "low " .. ctx.format(p.l), color = color },
+            { text = "close " .. ctx.format(p.c), color = color },
         }
+        -- How many individual readings this candle summarises, when the data says (`n`).
+        if p.n then
+            rows[#rows + 1] = { text = ("%d %s"):format(p.n, p.n == 1 and "scan" or "scans"), color = ctx.theme.text }
+        end
+        return { x = p.x, y = ctx.ys:Map(p.c), rows = rows }
     end,
 })

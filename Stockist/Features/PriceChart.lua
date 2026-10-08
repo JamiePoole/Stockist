@@ -57,7 +57,7 @@ local function seriesFor(store, itemID, kind, fromTs)
     end
     local points = {}
     for i, c in ipairs(store:GetCandles(itemID, kind, fromTs, nil)) do
-        points[i] = { x = c.t, o = c.o, h = c.h, l = c.l, c = c.c }
+        points[i] = { x = c.t, o = c.o, h = c.h, l = c.l, c = c.c, n = c.n }
         supply[i] = { x = c.t, y = c.q, up = c.c >= c.o }
     end
     return { price = { type = "candle", id = "price", points = points }, supply = supply, count = #points }

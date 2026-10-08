@@ -123,6 +123,23 @@ test("BuildConfig uses hourly candles for 1D and 1W and daily candles for 1M", f
     eq(week.panes[2].series[1].type, "bar")
 end)
 
+test("hourly candles carry their scan count through to the chart", function()
+    local S = load()
+    local store = S.ReadingStore.New({})
+    for i = 0, 3 do store:Add({ item = 2, ts = NOON - 2 * HOUR + i * 900, price = 100 + i, qty = 5 }) end
+    for i = 0, 1 do store:Add({ item = 2, ts = NOON - HOUR + i * 900, price = 90 + i, qty = 5 }) end
+    store:Add({ item = 2, ts = NOON, price = 80, qty = 5 })
+    local config = S.PriceChart.BuildConfig(store, 2, "1D", {}, NOON, 0)
+    local counts = {}
+    for _, p in ipairs(config.panes[1].series[1].points) do counts[#counts + 1] = p.n end
+    eq(table.concat(counts, ","), "4,2,1")
+    local model = S.Charts.Build(config, 640, 360)
+    local hit = S.Charts.Hover(model, new_recording_canvas(), model.xs:Map(NOON - 2 * HOUR), 150)
+    local texts = {}
+    for _, row in ipairs(hit.rows) do texts[#texts + 1] = row.text end
+    eq(table.concat(texts, "|"):find("4 scans", 1, true) ~= nil, true, "rows: " .. table.concat(texts, "|"))
+end)
+
 test("a day with only a little history shows one marked point per scan", function()
     local S = load()
     local store = scans(S, 9, 5, NOON - 3600, 900)
