@@ -423,3 +423,113 @@ test("the move since the previous scan sits right beside the price in the header
     eq(panel.scanText.text, "", "cleared when there is no data")
     Fake.uninstall()
 end)
+
+-- The header when the panel is too narrow for everything ----------------------------------------------
+
+--- Header pieces' widths for item 7, so the tests pick sizes from the measured text, not magic numbers.
+local function headerMeasure(panel)
+    local m = { name = panel.nameText:GetStringWidth(), price = panel.priceText:GetStringWidth(),
+        scan = panel.scanText:GetStringWidth() }
+    m.fixed = (m.price > 0 and 12 + m.price or 0) + (m.scan > 0 and ((m.price > 0 and 8 or 12) + m.scan) or 0)
+    m.choices = panel.metaChoices
+    local function meta(text)
+        panel.metaText:SetText(text)
+        return 12 + panel.metaText:GetStringWidth()
+    end
+    m.full, m.change = meta(m.choices[1]), meta(m.choices[2])
+    return m
+end
+
+local function longNamePanel(S)
+    S.ItemInfo.ColoredName = function() return "Craftsman's Writ: Shadow Goggles" end
+    local panel = S.ChartPanel.Create(UIParent, { popOut = true })
+    panel:SetItem(7)
+    return panel
+end
+
+local function widthFor(panel, m, metaWidth, nameWidth)
+    return panel.controlsWidth + 10 + nameWidth + m.fixed + metaWidth
+end
+
+test("a wide panel shows the whole header", function()
+    local S = setup()
+    local panel = longNamePanel(S)
+    local m = headerMeasure(panel)
+    panel.frame:SetWidth(widthFor(panel, m, m.full, m.name))
+    panel:LayoutHeader()
+    eq(panel.metaText.text:find("updated", 1, true) ~= nil, true, "everything fits")
+    eq(panel.nameText.size[1] >= m.name, true, "the name is not cut")
+    Fake.uninstall()
+end)
+
+test("with less room the 'updated' text goes first, then the 24h move, then the name is cut", function()
+    local S = setup()
+    local panel = longNamePanel(S)
+    local m = headerMeasure(panel)
+
+    panel.frame:SetWidth(widthFor(panel, m, m.full, m.name) - 1)
+    panel:LayoutHeader()
+    eq(panel.metaText.text:find("updated", 1, true), nil, "'updated ...' dropped")
+    eq(panel.metaText.text:find("24h", 1, true) ~= nil, true, "but the 24h move stays")
+    eq(panel.nameText.size[1] >= m.name, true, "the name is still whole")
+
+    panel.frame:SetWidth(widthFor(panel, m, m.change, m.name) - 1)
+    panel:LayoutHeader()
+    eq(panel.metaText.text, "", "then the 24h move goes")
+    eq(panel.nameText.size[1] >= m.name, true, "the name is still whole")
+
+    panel.frame:SetWidth(widthFor(panel, m, 0, m.name) - 30)
+    panel:LayoutHeader()
+    eq(panel.nameText.size[1], m.name + 1 - 30 - 1, "now the name is shortened (the client adds the '...')")
+    eq(panel.priceText.text ~= "", true, "the price is never cut")
+    eq(panel.nameHit.size[1] <= panel.nameText.size[1], true, "the hover area matches the shown name")
+    Fake.uninstall()
+end)
+
+test("the text never reaches the buttons, however narrow the panel gets", function()
+    local S = setup()
+    local panel = longNamePanel(S)
+    local m = headerMeasure(panel)
+    eq(panel.controlsWidth > 0, true)
+    for _, w in ipairs({ 600, 450, 380, 330, 300 }) do
+        panel.frame:SetWidth(w)
+        panel:LayoutHeader()
+        local used = panel.nameText.size[1] + m.fixed
+        if panel.metaText.text ~= "" then used = used + 12 + panel.metaText:GetStringWidth() end
+        local limit = w - panel.controlsWidth - 10
+        -- the name has a floor, so only check while that floor still leaves room
+        if limit >= 1 + m.fixed then eq(used <= limit, true, "width " .. w) end
+    end
+    panel.frame:SetWidth(100) -- absurdly narrow: the name floor holds and nothing errors
+    panel:LayoutHeader()
+    eq(panel.nameText.size[1], 1, "the name has no room left, but nothing breaks")
+    Fake.uninstall()
+end)
+
+test("'no data yet' outranks the item name", function()
+    local S = setup()
+    S.ItemInfo.ColoredName = function() return "Craftsman's Writ: Shadow Goggles" end
+    local panel = S.ChartPanel.Create(UIParent)
+    panel:SetItem(9)
+    panel.frame:SetWidth(panel.controlsWidth + 10 + 150)
+    panel:LayoutHeader()
+    eq(panel.metaText.text, "no data yet", "the reason for the empty chart stays")
+    -- flush to the margin, not past it: the name plus gap plus message ends exactly where the margin begins
+    local m = panel.metaText:GetStringWidth()
+    eq(panel.nameText.size[1] + 12 + m, 150, "name, one gap and the message fill the room exactly")
+    eq(panel.nameText.size[1] < panel.nameText:GetStringWidth(), true, "the name is what gets shortened")
+    Fake.uninstall()
+end)
+
+test("resizing the panel re-fits the header", function()
+    local S = setup()
+    local panel = longNamePanel(S)
+    local m = headerMeasure(panel)
+    panel.frame:SetWidth(widthFor(panel, m, 0, m.name) - 40)
+    Fake.fire(panel.frame, "OnSizeChanged")
+    eq(panel.nameText.size[1] < m.name, true, "shortened by the size change alone")
+    panel.frame:SetWidth(2000)
+    Fake.fire(panel.frame, "OnSizeChanged")
+    eq(panel.metaText.text:find("updated", 1, true) ~= nil, true, "everything returns when there is room")
+    Fake.uninstall()
+end)

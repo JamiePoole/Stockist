@@ -11,6 +11,7 @@ ChartPanel.__index = ChartPanel
 Stockist.ChartPanel = ChartPanel
 
 local LEGEND_GAP = 12 -- empty space between the chart and the legend below it
+local HEADER_MARGIN = 10 -- clear space kept between the header text and the buttons
 
 --- A switch button: coloured while on (and usable), plain while off, greyed text when it cannot be used.
 local function paintToggle(btn, on, enabled)
@@ -61,6 +62,8 @@ function ChartPanel.Create(parent, opts)
     -- Header, left to right: item name (hover for its tooltip), price, 24h change and age.
     self.nameText = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     self.nameText:SetPoint("TOPLEFT", 2, -4)
+    self.nameText:SetJustifyH("LEFT")
+    self.nameText:SetWordWrap(false) -- too long for the room: cut off with "..." (LayoutHeader sets the width)
     self.nameHit = CreateFrame("Frame", nil, frame)
     self.nameHit:SetPoint("TOPLEFT", self.nameText, "TOPLEFT")
     self.nameHit:EnableMouse(true)
@@ -84,18 +87,20 @@ function ChartPanel.Create(parent, opts)
     -- Controls, right to left: pop out | time scope buttons | divider | chart overlays.
     local prev
     local gap = -2
+    local used = 0 -- width taken by the buttons, from the right edge: the header text must stay clear of it
     if opts.popOut then
         local pop = Stockist.UI.IconButton.Create(frame, { icon = "popout", width = 24, height = 20 })
         pop:SetPoint("TOPRIGHT", 0, 0)
         pop:SetScript("OnClick", function() self:PopOut() end)
         Stockist.UI.Tooltip.Attach(pop, "popout")
         self.popOutButton = pop
-        prev, gap = pop, -8
+        prev, gap, used = pop, -8, 24
     end
     for i = #PriceChart.TIMEFRAMES, 1, -1 do
         local tf = PriceChart.TIMEFRAMES[i]
         local b = button(frame, tf.key, 40, "timeframe-" .. tf.key)
         if prev then b:SetPoint("RIGHT", prev, "LEFT", gap, 0) else b:SetPoint("TOPRIGHT", 0, 0) end
+        used = used + (prev and -gap or 0) + 40
         gap = -2
         b:SetScript("OnClick", function()
             if self.state.timeframe == tf.key then return end -- already the active scope
@@ -110,6 +115,7 @@ function ChartPanel.Create(parent, opts)
     divider:SetSize(1, 18)
     divider:SetPoint("RIGHT", prev, "LEFT", -7, 0)
     prev = divider
+    used = used + 7 + 1
     for _, def in ipairs({ { "bollinger", "BB", "bollinger" }, { "sma", "SMA", "sma" } }) do
         local key = def[1]
         local whyDisabled = function()
@@ -120,6 +126,7 @@ function ChartPanel.Create(parent, opts)
         end
         local b = button(frame, def[2], 40, def[3], whyDisabled)
         b:SetPoint("RIGHT", prev, "LEFT", -7, 0)
+        used = used + 7 + 40
         b:SetScript("OnClick", function(btn)
             if not Stockist.UI.Tooltip.IsAvailable(btn) then return end
             self.state.indicators[key] = not self.state.indicators[key]
@@ -129,6 +136,8 @@ function ChartPanel.Create(parent, opts)
         prev = b
     end
 
+    self.controlsWidth = used
+    self.metaChoices = { "" }
     self.chart = Stockist.Charts.Create(frame, { series = {} })
 
     -- Legend: the key on the left, "what to look for" (blue) on the right. The text carries its own
@@ -157,7 +166,10 @@ function ChartPanel.Create(parent, opts)
     self.message:Hide()
 
     -- The legend's height depends on its width, so make room for it again whenever the panel resizes.
-    frame:SetScript("OnSizeChanged", function() if self.state.itemID then self:LayoutChart() end end)
+    frame:SetScript("OnSizeChanged", function()
+        self:LayoutHeader()
+        if self.state.itemID then self:LayoutChart() end
+    end)
 
     -- Item names arrive from the server a moment after the first request.
     -- A load that fails means the item does not exist, which turns the panel into "Item not found".
@@ -216,23 +228,72 @@ function ChartPanel:LayoutChart()
     chartFrame:SetPoint("BOTTOMRIGHT", self.frame, "BOTTOMRIGHT", 0, tutorial and (legendHeight + LEGEND_GAP) or 0)
 end
 
+--- Fit the header (name, price, move since the last scan, and the "24h / updated" text) into the room left
+--- of the buttons. What gives way first: the "updated ..." text, then the 24h move, then the item name,
+--- which is cut off with "..." (hover it for the full name). The price and the scan move are never cut.
+--- A message such as "no data yet" outranks the name. Runs again whenever the text or the size changes.
+function ChartPanel:LayoutHeader()
+    local width = self.frame:GetWidth()
+    local natural = self.nameText:GetStringWidth()
+    local price, scan = self.priceText:GetStringWidth(), self.scanText:GetStringWidth()
+    local fixed = (price > 0 and (12 + price) or 0) + (scan > 0 and ((price > 0 and 8 or 12) + scan) or 0) -- with their gaps
+    local room = width - self.controlsWidth - HEADER_MARGIN
+    local choices = self.metaChoices
+
+    -- Empty pieces take no room: each piece hangs from the last one that has text, so the gaps between the
+    -- pieces that are shown are exactly the ones counted below.
+    self.priceText:ClearAllPoints()
+    self.priceText:SetPoint("LEFT", self.nameText, "RIGHT", 12, 0)
+    self.scanText:ClearAllPoints()
+    self.scanText:SetPoint("LEFT", price > 0 and self.priceText or self.nameText, "RIGHT", price > 0 and 8 or 12, 0)
+    self.metaText:ClearAllPoints()
+    self.metaText:SetPoint("LEFT", scan > 0 and self.scanText or (price > 0 and self.priceText or self.nameText),
+        "RIGHT", 12, 0)
+
+    local chosen, meta = choices[1], 0
+    if width > 1 then
+        chosen = nil
+        for _, text in ipairs(choices) do
+            self.metaText:SetText(text)
+            local w = text ~= "" and (12 + self.metaText:GetStringWidth()) or 0
+            if natural + fixed + w <= room then chosen, meta = text, w break end
+        end
+        if not chosen then
+            -- Nothing fits next to the whole name: keep a message, drop the rest, and shorten the name.
+            chosen = self.metaKeep and choices[1] or ""
+            self.metaText:SetText(chosen)
+            meta = chosen ~= "" and (12 + self.metaText:GetStringWidth()) or 0
+        end
+    end
+    self.metaText:SetText(chosen)
+
+    local nameWidth = natural + 1
+    if width > 1 and natural + fixed + meta > room then
+        nameWidth = room - fixed - meta
+    end
+    self.nameText:SetWidth(math.max(1, nameWidth))
+    self.nameHit:SetSize(math.max(1, math.min(natural, nameWidth)), math.max(1, self.nameText:GetStringHeight()))
+end
+
 --- Replace the chart with a message: the item does not exist ("404"), or it exists but has no prices.
 function ChartPanel:ShowStatus(status)
     local state = self.state
     self.statusKind = status.kind
+    self.metaKeep = false
     if status.kind == "notfound" then
         self.nameText:SetText(Format.Colored("Item not found", 0.92, 0.3, 0.3))
-        self.metaText:SetText("")
+        self.metaChoices = { "" }
     elseif status.kind == "noitem" then
         self.nameText:SetText("")
-        self.metaText:SetText("")
+        self.metaChoices = { "" }
     else
         self.nameText:SetText(Stockist.ItemInfo.ColoredName(state.itemID))
-        self.metaText:SetText("no data yet")
+        self.metaChoices = { "no data yet" }
+        self.metaKeep = true -- the reason there is no chart: the name gives way before this does
     end
-    self.nameHit:SetSize(math.max(1, self.nameText:GetStringWidth()), math.max(1, self.nameText:GetStringHeight()))
     self.priceText:SetText("")
     self.scanText:SetText("")
+    self:LayoutHeader()
 
     local Tooltip = Stockist.UI.Tooltip
     for _, btn in pairs(self.tfButtons) do
@@ -281,11 +342,12 @@ function ChartPanel:Refresh()
     self.available = config.indicators
 
     self.nameText:SetText(Stockist.ItemInfo.ColoredName(state.itemID))
-    self.nameHit:SetSize(math.max(1, self.nameText:GetStringWidth()), math.max(1, self.nameText:GetStringHeight()))
     local parts = PriceChart.HeaderParts(Stockist.store, state.itemID, now)
     self.priceText:SetText(parts and Format.MoneyDisplay(parts.price) or "")
     self.scanText:SetText(parts and Format.Change(parts.scan) or "")
-    self.metaText:SetText(parts and PriceChart.MetaText(parts) or "no data yet")
+    self.metaChoices = parts and PriceChart.MetaChoices(parts) or { "no data yet" }
+    self.metaKeep = parts == nil
+    self:LayoutHeader()
 
     local Tooltip = Stockist.UI.Tooltip
     -- The active scope is shown as selected (blue), not disabled: it is simply the one in use.
