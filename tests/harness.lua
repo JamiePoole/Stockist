@@ -51,6 +51,11 @@ function load_addon(...)
     return ns
 end
 
+--- Load a test-support file (tests/support/<name>.lua) into the global environment.
+function load_support(name)
+    dofile(TESTS_DIR .. "/support/" .. name .. ".lua")
+end
+
 function report()
     return passed, #failures, table.concat(failures, "\n")
 end

@@ -22,7 +22,9 @@ In game: `/reload`, then `/stkprobe` for the capability probe.
 ./scripts/test.ps1              # pure-Lua specs under Lua 5.1 (creates .venv on first run)
 ./scripts/test.ps1 -Filter data # only specs whose file name contains "data"
 ```
-In game, once an Auction House is open: `/stockist scan`, `/stockist`, `/stockist item <id>`, `/stockist movers`.
+In game, once an Auction House is open: `/stockist scan`, `/stockist`, `/stockist item <id>`, `/stockist movers`, `/stockist chart [id]`.
+
+The chart engine and how to extend it: [docs/charts.md](docs/charts.md).
 
 Findings about what the Forever client allows (chat channels, Communities, AH API) are in [docs/transport-findings.md](docs/transport-findings.md).
 

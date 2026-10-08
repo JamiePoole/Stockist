@@ -7,4 +7,6 @@
 - Market: Auction House full-scan adapter, price aggregation (min, median of cheapest units, supply).
 - Chat commands: `/stockist` (status, scan, item, movers, auto).
 - Re-scans automatically every 15 minutes while the Auction House stays open (`/stockist auto off` to disable).
+- Chart engine: plugin series (line, candle, bar), overlays (SMA, EMA, Bollinger, reference line), formatters, themes, multi-pane layout, crosshair and tooltip.
+- `/stockist chart [id]`: resizable price window with 1D/1W/1M/ALL, SMA and Bollinger toggles.
 - Unit tests under Lua 5.1 (`scripts/test.ps1`).

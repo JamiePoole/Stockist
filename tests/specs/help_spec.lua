@@ -1,0 +1,148 @@
+local function ns()
+    return load_addon("Core/EventBus.lua", "Core/Registry.lua", "Core/Format.lua", "Core/ItemInfo.lua",
+        "Core/Help.lua", "Core/HelpTopics.lua")
+end
+
+-- Help -----------------------------------------------------------------------------------------
+
+test("Help returns the long explanation only while tutorial mode is on", function()
+    local S = ns()
+    S.settings = {}
+    local title, short, detail = S.Help.Lines("sma")
+    eq(title, "Moving average (SMA 7)")
+    eq(type(short), "string"); eq(type(detail), "string")
+
+    S.Help.SetTutorial(false)
+    local _, short2, detail2 = S.Help.Lines("sma")
+    eq(short2, short)
+    is_nil(detail2)
+
+    S.Help.SetTutorial(true)
+    eq(type(select(3, S.Help.Lines("sma"))), "string")
+end)
+
+test("tutorial mode defaults to on and fires an event when changed", function()
+    local S = ns()
+    S.settings = {}
+    eq(S.Help.TutorialEnabled(), true)
+    local seen
+    S.Events:On("TUTORIAL_CHANGED", function(on) seen = on end)
+    S.Help.SetTutorial(false)
+    eq(seen, false)
+    eq(S.Help.TutorialEnabled(), false)
+end)
+
+test("unknown help keys return nothing instead of erroring", function()
+    local S = ns()
+    S.settings = {}
+    is_nil(S.Help.Lines("no-such-topic"))
+end)
+
+test("every topic has a title and a one-line description", function()
+    local S = ns()
+    S.settings = {}
+    for _, key in ipairs(S.Help.topics:List()) do
+        local topic = S.Help.topics:Get(key)
+        eq(type(topic.title) == "string" and #topic.title > 0, true, key .. " title")
+        eq(type(topic.short) == "string" and #topic.short > 0, true, key .. " short")
+    end
+end)
+
+-- Legend ---------------------------------------------------------------------------------------
+
+test("the legend is two colour-coded blocks: a key and blue tips", function()
+    local S = ns()
+    local key, tips = S.Help.Legend()
+    eq(type(key), "string"); eq(type(tips), "string")
+    -- key: white heading, gold labels, grey descriptions
+    eq(key:find("|cffffffffReading the chart|r", 1, true) ~= nil, true, "white heading")
+    eq(key:find("|cffffd100Thick part|r", 1, true) ~= nil, true, "gold label")
+    eq(key:find("|cff9aa0a6first to last price in that period|r", 1, true) ~= nil, true, "grey description")
+    -- tips: blue heading and blue text
+    eq(tips:find("|cff4da6ffWhat to look for|r", 1, true) ~= nil, true, "blue heading")
+    eq(tips:find("|cff9fcdff- ", 1, true) ~= nil, true, "blue tips")
+    -- every colour escape is closed
+    for _, block in ipairs({ key, tips }) do
+        local _, opens = block:gsub("|cff", "")
+        local _, closes = block:gsub("|r", "")
+        eq(opens, closes, "balanced colour codes")
+    end
+end)
+
+test("the legend has a line per key entry and per tip", function()
+    local S = ns()
+    local key, tips = S.Help.Legend()
+    local function lines(s) local n = 0 for _ in (s .. "\n"):gmatch("([^\n]*)\n") do n = n + 1 end return n end
+    eq(lines(key), 1 + #S.Help.legend.key)
+    eq(lines(tips), 1 + #S.Help.legend.tips)
+end)
+
+test("the tips are hints about reading a chart, not instructions to buy or sell", function()
+    local S = ns()
+    local _, tips = S.Help.Legend()
+    local lower = tips:lower()
+    eq(lower:find("not advice", 1, true) ~= nil, true, "says it is not advice")
+    for _, banned in ipairs({ "you should", "must sell", "must buy", "do not sell", "don't sell", "buy now", "sell now" }) do
+        eq(lower:find(banned, 1, true), nil, "no instruction: " .. banned)
+    end
+end)
+
+-- Item names ----------------------------------------------------------------------------------
+
+test("Format.ColorCode and Colored", function()
+    local S = ns()
+    eq(S.Format.ColorCode(0, 1, 0), "|cff00ff00")
+    eq(S.Format.ColorCode(0.12, 0.5, 1), "|cff1f80ff")
+    eq(S.Format.Colored("Linen", 1, 1, 1), "|cffffffffLinen|r")
+end)
+
+test("Format.MoneyColored colours gold, silver and copper separately", function()
+    local S = ns()
+    local m = S.Format.MoneyColored(123456)
+    eq(m, "|cffffd100" .. "12g|r |cffc7c7cf34s|r |cffeda65e56c|r")
+    eq(S.Format.MoneyColored(120000), "|cffffd10012g|r")
+    eq(S.Format.MoneyColored(0), "|cffeda65e0c|r")
+end)
+
+test("Format.MoneyIcons puts the real coin icon after each amount", function()
+    local S = ns()
+    local gold = "|TInterface\\MoneyFrame\\UI-GoldIcon:0:0:2:0|t"
+    local silver = "|TInterface\\MoneyFrame\\UI-SilverIcon:0:0:2:0|t"
+    local copper = "|TInterface\\MoneyFrame\\UI-CopperIcon:0:0:2:0|t"
+    eq(S.Format.MoneyIcons(123456), "12" .. gold .. " 34" .. silver .. " 56" .. copper)
+    eq(S.Format.MoneyIcons(120000), "12" .. gold)
+    eq(S.Format.MoneyIcons(340), "3" .. silver .. " 40" .. copper)
+    eq(S.Format.MoneyIcons(0), "0" .. copper)
+    eq(S.Format.MoneyDisplay(340), S.Format.MoneyIcons(340))
+    eq(S.Format.MoneyIcons(339.6), S.Format.MoneyIcons(340), "rounds to whole copper")
+end)
+
+test("ColoredName wraps a cached item in its rarity colour", function()
+    local S = ns()
+    ITEM_QUALITY_COLORS = { [2] = { r = 0.12, g = 1, b = 0 } }
+    C_Item = {
+        GetItemNameByID = function() return "Peacebloom" end,
+        GetItemQualityByID = function() return 2 end,
+    }
+    eq(S.ItemInfo.ColoredName(2447), "|cff1fff00Peacebloom|r")
+    C_Item, ITEM_QUALITY_COLORS = nil, nil
+end)
+
+test("ColoredName asks the client to load an uncached item and falls back to its id", function()
+    local S = ns()
+    local requested
+    C_Item = {
+        GetItemNameByID = function() return nil end,
+        RequestLoadItemDataByID = function(id) requested = id end,
+    }
+    eq(S.ItemInfo.ColoredName(777), "item:777")
+    eq(requested, 777)
+    C_Item = nil
+end)
+
+test("ColoredName leaves the name plain when the quality colour is unknown", function()
+    local S = ns()
+    C_Item = { GetItemNameByID = function() return "Mystery" end }
+    eq(S.ItemInfo.ColoredName(5), "Mystery")
+    C_Item = nil
+end)

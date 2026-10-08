@@ -133,6 +133,33 @@ test("Store accepts out-of-order readings without corrupting open/close", functi
     eq(store:Latest(1).price, 150)
 end)
 
+test("Store keeps one tick per reading, in order, and returns them from a start time", function()
+    local S = ns()
+    local store = S.ReadingStore.New({})
+    for i = 1, 5 do store:Add({ item = 1, ts = 1000 + i * 900, price = 100 + i, qty = i }) end
+    local all = store:Ticks(1)
+    eq(#all, 5)
+    eq(all[1].x, 1900); eq(all[1].y, 101); eq(all[1].q, 1)
+    eq(all[5].y, 105)
+    eq(#store:Ticks(1, 1000 + 3 * 900), 3)
+    eq(#store:Ticks(99), 0)
+    store:Add({ item = 1, ts = 1000 + 2 * 900, price = 7, qty = 7 }) -- late reading: candle only, no tick
+    eq(#store:Ticks(1), 5)
+    store:Add({ item = 1, ts = 1000 + 5 * 900, price = 7, qty = 7 }) -- duplicate time: ignored
+    eq(#store:Ticks(1), 5)
+end)
+
+test("Store ticks are limited to the last day and 96 entries", function()
+    local S = ns()
+    local store = S.ReadingStore.New({})
+    for i = 1, 200 do store:Add({ item = 1, ts = 1000 + i * 60, price = 10, qty = 1 }) end
+    local ticks = store:Ticks(1)
+    eq(#ticks, 96, "count cap")
+    eq(ticks[#ticks].x, 1000 + 200 * 60, "newest kept")
+    store:Add({ item = 1, ts = 1000 + 200 * 60 + 2 * 86400, price = 10, qty = 1 })
+    eq(#store:Ticks(1), 1, "everything older than a day dropped")
+end)
+
 test("Store rejects malformed readings", function()
     local S = ns()
     local store = S.ReadingStore.New({})

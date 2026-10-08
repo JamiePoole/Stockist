@@ -48,11 +48,54 @@ function Store:_item(itemID)
     return it
 end
 
+-- Recent ticks: every individual reading from the last day, kept as three parallel arrays (time,
+-- price, quantity) so the file stays small. They let short views show one point per scan instead
+-- of one flat candle per hour.
+local TICK_KEEP_SEC = 86400
+local TICK_MAX = 96
+
+local function addTick(it, r)
+    local tt, tp, tq = it.tt, it.tp, it.tq
+    if not tt then
+        tt, tp, tq = {}, {}, {}
+        it.tt, it.tp, it.tq = tt, tp, tq
+    end
+    local n = #tt
+    if n > 0 and r.ts <= tt[n] then return end -- ticks are append-only and in time order
+    n = n + 1
+    tt[n], tp[n], tq[n] = r.ts, r.price, r.qty
+
+    local drop = 0
+    local cutoff = r.ts - TICK_KEEP_SEC
+    while drop < n and tt[drop + 1] < cutoff do drop = drop + 1 end
+    if n - drop > TICK_MAX then drop = n - TICK_MAX end
+    if drop > 0 then
+        for i = 1, n - drop do
+            tt[i], tp[i], tq[i] = tt[i + drop], tp[i + drop], tq[i + drop]
+        end
+        for i = n - drop + 1, n do tt[i], tp[i], tq[i] = nil, nil, nil end
+    end
+end
+
+--- Individual readings since `fromTs` (default: all kept), oldest first, as { x = time, y = price, q = qty }.
+function Store:Ticks(itemID, fromTs)
+    local it = self.db.items[itemID]
+    local out = {}
+    if not (it and it.tt) then return out end
+    for i = 1, #it.tt do
+        if not fromTs or it.tt[i] >= fromTs then
+            out[#out + 1] = { x = it.tt[i], y = it.tp[i], q = it.tq[i] }
+        end
+    end
+    return out
+end
+
 --- Record one reading { item, ts, price, min?, qty }. `price` is the headline price in copper.
 --- Returns false (and records nothing) if the reading is malformed.
 function Store:Add(reading)
     if not validReading(reading) then return false end
     local it = self:_item(reading.item)
+    addTick(it, reading)
     if not it.last or reading.ts >= it.last.ts then
         it.last = {
             ts = reading.ts,
