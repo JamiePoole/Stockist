@@ -503,8 +503,8 @@ local function updateHints()
 end
 
 --- Make `frame` take dropped items: `onPick(itemID)` runs for an item let go over it, or clicked onto it while
---- the cursor carries one. `opts.hint = true` shades the frame and says "Drop to chart this item" while an
---- item is on the cursor. The frame must already take the mouse (EnableMouse); existing handlers are kept.
+--- the cursor carries one. `opts.hint = true` shades the frame and says "Drop to chart this item" (or
+--- `opts.text`) while an item is on the cursor. The frame must already take the mouse (EnableMouse); existing handlers are kept.
 function Picker.AcceptDrops(frame, onPick, opts)
     local lastTime
     local function receive()
@@ -536,7 +536,7 @@ function Picker.AcceptDrops(frame, onPick, opts)
         local text = overlay:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
         text:SetPoint("CENTER")
         text:SetTextColor(0.75, 0.88, 1)
-        text:SetText("Drop to chart this item")
+        text:SetText(opts.text or "Drop to chart this item")
         overlay:Hide()
         drops[#drops + 1] = { frame = frame, overlay = overlay }
         if not dropWatcher then
