@@ -25,8 +25,8 @@ IconButton.ICONS = {
     },
 }
 
--- A dim grey at rest so the icon does not outshine the text buttons beside it; gold when hovered.
-local NORMAL = { 0.55, 0.58, 0.63, 0.85 }
+-- A light grey at rest, fully opaque; gold when hovered.
+local NORMAL = { 0.85, 0.88, 0.92, 1 }
 local HOVER = { 1, 0.82, 0, 1 }
 
 function IconButton.Create(parent, opts)

@@ -87,9 +87,12 @@ function Window.Create(opts)
 
     -- Tutorial mode is one account-wide setting shared by every window and tooltip.
     local help = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
-    help:SetSize(23, 23)
-    help:SetPoint("RIGHT", close, "LEFT", -2, 0)
+    help:SetSize(24, 24)
+    help:SetPoint("RIGHT", close, "LEFT", -2, 1)
     help:SetText("?")
+    -- Bold, to stand up next to the close button's artwork: the outline thickens the strokes.
+    local face, size = help:GetFontString():GetFont()
+    help:GetFontString():SetFont(face or "Fonts\\FRIZQT__.TTF", (size or 12) + 2, "THICKOUTLINE")
     -- Sit above the draggable title bar, which spans the same strip and would otherwise take the click.
     help:SetFrameLevel(bar:GetFrameLevel() + 10)
     close:SetFrameLevel(bar:GetFrameLevel() + 10)

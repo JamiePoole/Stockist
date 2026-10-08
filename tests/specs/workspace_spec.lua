@@ -242,8 +242,8 @@ test("an icon button draws its segments, highlights on hover and rejects unknown
     eq(b.lines[1].startPoint[1], "CENTER")
     eq(b.lines[5].endPoint[3], 5); eq(b.lines[5].endPoint[4], 5)
     local rest = b.lines[1].color
-    eq(rest[1] < 0.7 and rest[2] < 0.7 and rest[3] < 0.7, true, "dim grey at rest, not bright white")
-    eq(rest[4] < 1, true, "slightly transparent at rest")
+    eq(rest[1] > 0.8 and rest[2] > 0.8 and rest[3] > 0.8, true, "light grey at rest")
+    eq(rest[4], 1, "fully opaque at rest")
     local restCopy = { rest[1], rest[2], rest[3], rest[4] }
     Fake.fire(b, "OnEnter")
     eq(b.lines[1].color[1], 1); eq(b.lines[1].color[3], 0, "gold while hovered"); eq(b.lines[1].color[4], 1)
