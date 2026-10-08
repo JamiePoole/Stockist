@@ -1,26 +1,26 @@
 local ADDON_NAME, Stockist = ...
 
--- Pop-outs: any registered panel type in its own window, any number of times. Each window holds its own panel,
--- is independent of the workspace and of other pop-outs, and remembers its position and size.
---   Stockist.PopOut.Open("watchlist")                          a new pop-out (or a free closed one)
---   Stockist.PopOut.Open("chart", { itemID = 2589 })           options go to the panel's Apply
---   Stockist.PopOut.Show("chart", { itemID = 2589 })           the one shared window (for /stockist chart)
+-- Pop-outs: a panel from the workspace in a window of its own, so it can be used without a workspace (a
+-- watchlist or a chart on its own). One pop-out per panel type: popping out again reuses and updates the same
+-- window instead of spawning another. The window holds its own panel, independent of the workspace, and
+-- remembers its position and size.
+--   Stockist.PopOut.Open("watchlist")
+--   Stockist.PopOut.Open("chart", { itemID = 2589 })     options go to the panel's Apply
 -- A panel type opts in by registering a `popout` table of sizes next to its `create`:
 --   Stockist.Panels:Register("watchlist", { title = ..., create = ..., popout = { width, height, minWidth, minHeight } })
--- A panel may define Apply(opts) (called with the options each time its window is opened), Title() (the
--- window title, updated through its onTitle callback) and Drop(itemID) or Pick(itemID) (for items dropped on
--- the window). Windows are never destroyed, only hidden and reused: a hidden panel does no work, because
+-- A panel may define Apply(opts) (called with the options each time the window is opened), Title() (the window
+-- title, updated through its onTitle callback) and Drop(itemID) or Pick(itemID) (for items dropped on the
+-- window). The window is created once and then only hidden and shown; a hidden panel does no work because
 -- panels refresh only while visible.
 local PopOut = { slots = {}, built = 0 }
 Stockist.PopOut = PopOut
 
-local MAX_PER_TYPE = 12 -- if every one is open, the last is reused
-local STAGGER = 28      -- each new window opens this many pixels down and right of the one before
+local STAGGER = 28 -- each pop-out of a different type opens this far down and right of the one before
 
---- The first chart window keeps the name it always had, so its saved position survives.
-local function windowName(typeName, index)
-    if typeName == "chart" and index == 1 then return "StockistChartWindow" end
-    return ("StockistPopout_%s_%d"):format(typeName, index)
+--- The chart window keeps the name it always had, so its saved position survives.
+local function windowName(typeName)
+    if typeName == "chart" then return "StockistChartWindow" end
+    return "StockistPopout_" .. typeName
 end
 
 local function updateTitle(slot)
@@ -29,9 +29,9 @@ local function updateTitle(slot)
     slot.win.title:SetText("Stockist - " .. text)
 end
 
-local function build(typeName, def, index)
+local function build(typeName, def)
     local sizes = def.popout or {}
-    local name = windowName(typeName, index)
+    local name = windowName(typeName)
     local win = Stockist.UI.Window.Create({
         name = name, title = "Stockist - " .. def.title,
         width = sizes.width or 520, height = sizes.height or 400,
@@ -47,7 +47,7 @@ local function build(typeName, def, index)
 
     -- No pop-out button inside a pop-out, and no link group until a panel asks for one.
     local panel = def.create(win.content, { popOut = false })
-    local slot = { win = win, panel = panel, def = def, index = index, type = typeName }
+    local slot = { win = win, panel = panel, def = def, type = typeName }
     panel.onTitle = function() updateTitle(slot) end
 
     local function drop(itemID)
@@ -59,7 +59,15 @@ local function build(typeName, def, index)
     return slot
 end
 
-local function present(slot, opts)
+--- Open the pop-out of a panel type, pointing it at `opts`. Returns the slot ({ win, panel, type }).
+function PopOut.Open(typeName, opts)
+    local def = Stockist.Panels:Get(typeName)
+    if not def then error(("no panel type '%s' to pop out"):format(tostring(typeName)), 2) end
+    local slot = PopOut.slots[typeName]
+    if not slot then
+        slot = build(typeName, def)
+        PopOut.slots[typeName] = slot
+    end
     if slot.panel.Apply then slot.panel:Apply(opts or {}) end
     updateTitle(slot)
     slot.win.frame:Show()
@@ -70,54 +78,12 @@ local function present(slot, opts)
     return slot
 end
 
-local function definition(typeName)
-    local def = Stockist.Panels:Get(typeName)
-    if not def then error(("no panel type '%s' to pop out"):format(tostring(typeName)), 3) end
-    return def
+--- The pop-out of a panel type, or nil if it was never opened.
+function PopOut.Slot(typeName)
+    return PopOut.slots[typeName]
 end
 
---- Open a pop-out of a panel type in a new window, or in one that was closed earlier. Returns the slot
---- ({ win, panel, index, type }).
-function PopOut.Open(typeName, opts)
-    local def = definition(typeName)
-    local list = PopOut.slots[typeName]
-    if not list then list = {}; PopOut.slots[typeName] = list end
-    local slot
-    for i = 1, MAX_PER_TYPE do
-        local existing = list[i]
-        if not existing then
-            slot = build(typeName, def, i)
-            list[i] = slot
-            break
-        elseif not existing.win.frame:IsShown() then
-            slot = existing
-            break
-        end
-    end
-    return present(slot or list[MAX_PER_TYPE], opts)
-end
-
---- The shared window of a panel type (the first one): opened if needed and pointed at `opts`. This is what
---- /stockist chart uses, so it replaces what its window shows instead of piling up windows.
-function PopOut.Show(typeName, opts)
-    local def = definition(typeName)
-    local list = PopOut.slots[typeName]
-    if not list then list = {}; PopOut.slots[typeName] = list end
-    list[1] = list[1] or build(typeName, def, 1)
-    return present(list[1], opts)
-end
-
---- The slot at `index` (default 1) of a panel type, or nil if it was never opened.
-function PopOut.Slot(typeName, index)
-    local list = PopOut.slots[typeName]
-    return list and list[index or 1] or nil
-end
-
---- How many windows of a panel type are open right now.
-function PopOut.OpenCount(typeName)
-    local n = 0
-    for _, slot in ipairs(PopOut.slots[typeName] or {}) do
-        if slot.win.frame:IsShown() then n = n + 1 end
-    end
-    return n
+function PopOut.IsOpen(typeName)
+    local slot = PopOut.slots[typeName]
+    return slot ~= nil and slot.win.frame:IsShown()
 end

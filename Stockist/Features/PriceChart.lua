@@ -223,14 +223,13 @@ end
 -- Window (game only): the chart panel (Features/ChartPanel.lua) in a pop-out window (Features/PopOut.lua)
 ---------------------------------------------------------------------------------------------------
 
---- The shared chart window's panel (nil until it has been opened once).
+--- The chart pop-out's panel (nil until it has been opened once).
 function PriceChart.PopOutPanel()
-    local slot = Stockist.PopOut.Slot("chart", 1)
+    local slot = Stockist.PopOut.Slot("chart")
     return slot and slot.panel or nil
 end
 
---- Open the shared price window (the one /stockist chart uses) for an item. For a window of its own, use
---- Stockist.PopOut.Open("chart", ...).
+--- Open the chart pop-out (the window /stockist chart uses) for an item.
 function PriceChart.Show(itemID)
-    Stockist.PopOut.Show("chart", { itemID = itemID })
+    Stockist.PopOut.Open("chart", { itemID = itemID })
 end
