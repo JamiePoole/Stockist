@@ -35,9 +35,15 @@ R("watchlist-track", "Track this item", "Adds the item shown in the chart to you
     "Tracked items are kept in this list and their price history is stored for longer, so you can see "
     .. "slow trends. Items you do not track are cleaned up after a while.")
 
-R("change-scan", "Change since the last scan", "How much the price moved between the two most recent scans of the Auction House.",
-    "Green is up, red is down. It is the quickest way to see whether something just moved. Scans are "
-    .. "at least 15 minutes apart, so this is a short-term move; the 24h figure beside it is the bigger picture.")
+R("change-scope", "Change over this time range", "How much the price has moved over the range you picked: 24 hours, 7 days or 30 days.",
+    "Green is up, red is down. It changes with the 1D / 1W / 1M buttons, so it always describes the chart "
+    .. "you are looking at. With less history than the range it says how long it really covers. A dim dash "
+    .. "means there is not enough history for that range yet; it fills in by itself as scans build up.")
+
+R("change-recent", "Recent change", "How far the latest price is from its average over the last couple of hours.",
+    "Green is up, red is down. Comparing with an average, not just the previous scan, stops one odd "
+    .. "listing from making the number jump around. It appears once there are a few scans to average. "
+    .. "Handy for an item you are not watching: it shows whether it is moving right now.")
 
 R("tutorial", "Tutorial tips", "Turns the longer explanations on or off.",
     "When on, buttons and the chart show plain-language descriptions of what each thing means. "

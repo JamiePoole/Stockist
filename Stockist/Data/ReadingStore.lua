@@ -190,13 +190,61 @@ function Store:PriceAt(itemID, ts)
     return bestPrice
 end
 
---- Percent change of the latest scan's price versus the scan before it. Nil with fewer than two
---- scans kept (only the last day of scans is) or a zero earlier price.
-function Store:ScanChange(itemID)
+--- Percent change of the latest scan's price versus the average of the scans in the `windowSec` before it,
+--- which smooths out the jumpiness of comparing two single scans. Returns percent, scansUsed; nil unless at
+--- least two earlier scans fall in the window (or the average is zero). Only the last day of scans is kept.
+function Store:SmoothedChange(itemID, windowSec)
     local it = self.db.items[itemID]
-    local n = it and it.tp and #it.tp or 0
-    if n < 2 or it.tp[n - 1] == 0 then return nil end
-    return (it.tp[n] - it.tp[n - 1]) / it.tp[n - 1] * 100
+    local n = it and it.tt and #it.tt or 0
+    if n < 3 then return nil end
+    local sum, count = 0, 0
+    for i = n - 1, 1, -1 do
+        if it.tt[i] < it.tt[n] - windowSec then break end
+        sum, count = sum + it.tp[i], count + 1
+    end
+    if count < 2 then return nil end
+    local mean = sum / count
+    if mean == 0 then return nil end
+    return (it.tp[n] - mean) / mean * 100, count
+end
+
+--- The oldest candle we hold for an item, as the best guide to how far back its prices go. Hourly candles
+--- are exact; a daily candle starts at midnight, up to a day before its first reading, so a daily candle is
+--- used only when it reaches back further than the hourly ones do by more than that.
+local function oldestCandle(it)
+    local function oldestOf(res)
+        local best
+        for _, candle in pairs(it[res] or {}) do
+            if not best or candle.t < best.t then best = candle end
+        end
+        return best
+    end
+    local fine, coarse = oldestOf("hourly"), oldestOf("daily")
+    if fine and (not coarse or fine.t - coarse.t < 86400) then return fine end
+    return coarse or fine
+end
+
+--- How far back our oldest price for an item goes, in seconds (0 with none).
+function Store:HistorySpan(itemID, now)
+    local it = self.db.items[itemID]
+    local oldest = it and oldestCandle(it)
+    return oldest and math.max(0, now - oldest.t) or 0
+end
+
+--- Percent change of the latest price over (up to) the last `spanSec`. Uses the price at `now - spanSec`; with
+--- less history than that, the oldest price we hold, as long as it covers at least half the span.
+--- Returns percent, secondsActuallyCovered; nil if there is no latest reading or too little history.
+function Store:ChangeOver(itemID, spanSec, now)
+    local last = self:Latest(itemID)
+    if not last then return nil end
+    local pct = self:Change(itemID, spanSec, now)
+    if pct then return pct, spanSec end
+    local oldest = oldestCandle(self.db.items[itemID])
+    if not oldest or oldest.o == 0 then return nil end
+    local oldestT, oldestOpen = oldest.t, oldest.o
+    local covered = now - oldestT
+    if covered < spanSec * 0.5 then return nil end
+    return (last.price - oldestOpen) / oldestOpen * 100, covered
 end
 
 --- Percent change of the latest price versus the price `windowSec` before `now`.
