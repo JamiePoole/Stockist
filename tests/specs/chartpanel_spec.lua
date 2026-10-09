@@ -607,3 +607,71 @@ test("the chart header has the same padding as the watchlist's, while the chart 
     eq(chart.controlsWidth >= S.ChartPanel.HEADER_RIGHT + 24, true)
     Fake.uninstall()
 end)
+
+-- The view is remembered -----------------------------------------------------------------------------
+
+test("turning Bollinger bands on is remembered by the next chart, and across a reload", function()
+    local S = setup()
+    local panel = S.ChartPanel.Create(UIParent)
+    panel:SetItem(7)
+    eq(panel.state.indicators.bollinger, false, "off by default")
+    Fake.fire(panel.toggleButtons.bollinger, "OnClick")
+    eq(panel.state.indicators.bollinger, true)
+    eq(S.settings.chart.indicators.bollinger, true, "written to the saved settings")
+
+    -- a new chart (as after a reload, with the same saved settings)
+    local after = S.ChartPanel.Create(UIParent)
+    eq(after.state.indicators.bollinger, true, "opens with the bands on")
+    eq(after.state.indicators.sma, true, "and the average as it was")
+    Fake.uninstall()
+end)
+
+test("switching the average off and the time range to a month is remembered too", function()
+    local S = setup()
+    local panel = S.ChartPanel.Create(UIParent)
+    panel:SetItem(7)
+    Fake.fire(panel.toggleButtons.sma, "OnClick")
+    Fake.fire(panel.tfButtons["1M"], "OnClick")
+    local after = S.ChartPanel.Create(UIParent)
+    eq(after.state.indicators.sma, false)
+    eq(after.state.timeframe, "1M")
+    Fake.uninstall()
+end)
+
+test("a chart opened with an explicit view keeps it, and does not overwrite what was saved", function()
+    local S = setup()
+    S.settings.chart = { timeframe = "1W", indicators = { sma = false, bollinger = true } }
+    local custom = S.ChartPanel.Create(UIParent, { timeframe = "1M", indicators = { sma = true, bollinger = false } })
+    eq(custom.state.timeframe, "1M"); eq(custom.state.indicators.bollinger, false)
+    eq(S.settings.chart.timeframe, "1W", "creating it saved nothing")
+    local plain = S.ChartPanel.Create(UIParent)
+    eq(plain.state.timeframe, "1W"); eq(plain.state.indicators.bollinger, true)
+    -- a pop-out opened with the source panel's view does not rewrite the saved view either
+    custom:Apply({ timeframe = "1D", indicators = { sma = false, bollinger = false } })
+    eq(S.settings.chart.timeframe, "1W")
+    Fake.uninstall()
+end)
+
+test("two charts do not share their indicator tables: one's toggle does not flip the other", function()
+    local S = setup()
+    local a = S.ChartPanel.Create(UIParent)
+    local b = S.ChartPanel.Create(UIParent)
+    a:SetItem(7); b:SetItem(7)
+    Fake.fire(a.toggleButtons.bollinger, "OnClick")
+    eq(a.state.indicators.bollinger, true)
+    eq(b.state.indicators.bollinger, false, "b keeps its own view until it is next created")
+    Fake.uninstall()
+end)
+
+test("unreadable saved values fall back to the defaults, and no settings at all is fine", function()
+    local S = setup()
+    S.settings.chart = { timeframe = "5Y", indicators = "nonsense" }
+    local panel = S.ChartPanel.Create(UIParent)
+    eq(panel.state.timeframe, "1D"); eq(panel.state.indicators.sma, true); eq(panel.state.indicators.bollinger, false)
+    S.settings = nil
+    local bare = S.ChartPanel.Create(UIParent)
+    bare:SetItem(7)
+    Fake.fire(bare.toggleButtons.bollinger, "OnClick") -- must not error without settings
+    eq(bare.state.indicators.bollinger, true)
+    Fake.uninstall()
+end)

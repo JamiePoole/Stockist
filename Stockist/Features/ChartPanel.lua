@@ -48,14 +48,27 @@ end
 --- indicators ({ sma = bool, bollinger = bool }), link (a link group name: the panel then follows
 --- that group's selected item, see Core/Link.lua), popOut (add a pop-out icon button, rightmost in the
 --- header, that opens the item in its own window).
+--- The view the player last chose (time range and indicators), kept account-wide so the next chart, and the next
+--- session, opens the same way. Anything unreadable falls back to the defaults.
+function ChartPanel.SavedView()
+    local saved = Stockist.settings and Stockist.settings.chart or {}
+    local timeframe = "1D"
+    for _, tf in ipairs(PriceChart.TIMEFRAMES) do
+        if tf.key == saved.timeframe then timeframe = tf.key end
+    end
+    local on = type(saved.indicators) == "table" and saved.indicators or { sma = true, bollinger = false }
+    return timeframe, { sma = on.sma == true, bollinger = on.bollinger == true }
+end
+
 function ChartPanel.Create(parent, opts)
     opts = opts or {}
+    local savedTimeframe, savedIndicators = ChartPanel.SavedView()
     local self = setmetatable({
         link = opts.link,
         state = {
             itemID = opts.itemID or Stockist.Link.Get(opts.link),
-            timeframe = opts.timeframe or "1D",
-            indicators = opts.indicators or { sma = true, bollinger = false },
+            timeframe = opts.timeframe or savedTimeframe,
+            indicators = opts.indicators or savedIndicators,
         },
         available = {}, -- indicator availability for the chart on screen, set by Refresh
         tfButtons = {},
@@ -133,6 +146,7 @@ function ChartPanel.Create(parent, opts)
         b:SetScript("OnClick", function()
             if self.state.timeframe == tf.key then return end -- already the active scope
             self.state.timeframe = tf.key
+            self:RememberView()
             self:Refresh()
         end)
         self.tfButtons[tf.key] = b
@@ -158,6 +172,7 @@ function ChartPanel.Create(parent, opts)
         b:SetScript("OnClick", function(btn)
             if not Stockist.UI.Tooltip.IsAvailable(btn) then return end
             self.state.indicators[key] = not self.state.indicators[key]
+            self:RememberView()
             self:Refresh()
         end)
         self.toggleButtons[key] = b
@@ -243,6 +258,16 @@ function ChartPanel:PopOut()
         itemID = self.state.itemID, timeframe = self.state.timeframe,
         indicators = { sma = self.state.indicators.sma, bollinger = self.state.indicators.bollinger },
     })
+end
+
+--- Save the time range and indicators the player just chose, for the next chart and the next session. Only a
+--- choice made at the buttons is saved, not the view a pop-out is opened with.
+function ChartPanel:RememberView()
+    if not Stockist.settings then return end
+    Stockist.settings.chart = {
+        timeframe = self.state.timeframe,
+        indicators = { sma = self.state.indicators.sma == true, bollinger = self.state.indicators.bollinger == true },
+    }
 end
 
 --- Take the options a pop-out window is opened with.
