@@ -37,7 +37,8 @@ R("watchlist-track", "Track this item", "Adds the item shown in the chart to you
 
 R("change-scope", "Change over this time range", "How much the price has moved over the range you picked: 24 hours, 7 days or 30 days.",
     "Green is up, red is down. It changes with the 1D / 1W / 1M buttons, so it always describes the chart "
-    .. "you are looking at. With less history than the range it says how long it really covers.")
+    .. "you are looking at. With less history than the range it says how long it really covers. A dim dash "
+    .. "means there is not enough history for that range yet; it fills in by itself as scans build up.")
 
 R("change-recent", "Recent change", "How far the latest price is from its average over the last couple of hours.",
     "Green is up, red is down. Comparing with an average, not just the previous scan, stops one odd "

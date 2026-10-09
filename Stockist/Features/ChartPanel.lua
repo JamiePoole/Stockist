@@ -98,7 +98,7 @@ function ChartPanel.Create(parent, opts)
     self.changeHit = CreateFrame("Frame", nil, frame)
     self.changeHit:SetAllPoints(self.changeText)
     self.changeHit:EnableMouse(true)
-    Stockist.UI.Tooltip.Attach(self.changeHit, "change-scope")
+    Stockist.UI.Tooltip.Attach(self.changeHit, "change-scope", function() return self:ChangeHint() end)
     self.recentText = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     self.recentText:SetPoint("LEFT", self.changeText, "RIGHT", 8, 0)
     self.recentHit = CreateFrame("Frame", nil, frame)
@@ -258,6 +258,14 @@ function ChartPanel:Title()
     return ("%s (Price chart)"):format(Stockist.ItemInfo.Name(id) or ("item:" .. id))
 end
 
+--- Why the scope's move is a dash: how much history it needs against how much exists. Nil when it is shown.
+function ChartPanel:ChangeHint()
+    local p = self.headerParts
+    if not p or p.change then return nil end
+    return ("Not enough history yet: this range needs about %s of prices and we have %s."):format(
+        Format.Span(p.needSpan), Format.Span(p.history or 0))
+end
+
 function ChartPanel:UpdateTitle()
     if self.onTitle then self.onTitle(self:Title()) end
 end
@@ -403,6 +411,7 @@ function ChartPanel:ShowStatus(status)
     end
     self.priceText:SetText("")
     self.changeText:SetText("")
+    self.headerParts = nil
     self.recentFull = ""
     self:LayoutHeader()
     self:UpdateTitle()
@@ -456,6 +465,7 @@ function ChartPanel:Refresh()
     self.nameText:SetText(Stockist.ItemInfo.ColoredName(state.itemID))
     local parts = PriceChart.HeaderParts(Stockist.store, state.itemID, now, state.timeframe)
     self.priceText:SetText(parts and Format.MoneyDisplay(parts.price) or "")
+    self.headerParts = parts
     self.changeText:SetText(parts and PriceChart.ChangeText(parts) or "")
     self.recentFull = parts and PriceChart.RecentText(parts) or ""
     self.metaChoices = parts and PriceChart.MetaChoices(parts) or { "no data yet" }

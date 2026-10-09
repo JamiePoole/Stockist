@@ -199,6 +199,8 @@ function PriceChart.HeaderParts(store, itemID, now, key)
         price = last.price, min = last.min, age = now - last.ts,
         recent = (store:SmoothedChange(itemID, RECENT_WINDOW)),
         change = change, changeLabel = label,
+        -- for the hint shown when there is no move yet: how much history the scope needs, and how much exists
+        needSpan = tf.span * 0.5, history = change and covered or store:HistorySpan(itemID, now),
     }
 end
 
@@ -214,7 +216,11 @@ end
 --- The main move in the header, over the chart's scope: "+3.10% 7d", the figure coloured green or red and
 --- the span in grey. Empty when there is no move to show.
 function PriceChart.ChangeText(parts)
-    if not parts.change then return "" end
+    if not parts.change then
+        -- Not enough history for this scope yet: a dim dash, so the gap does not look like a fault.
+        if not parts.changeLabel then return "" end
+        return Format.Colored("- " .. parts.changeLabel, 0.5, 0.53, 0.58)
+    end
     return Format.Change(parts.change) .. " " .. Format.Colored(parts.changeLabel or "24h", 0.6, 0.63, 0.68)
 end
 
