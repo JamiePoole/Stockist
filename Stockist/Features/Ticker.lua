@@ -152,6 +152,12 @@ function Ticker.Create(parent, opts)
     loader:RegisterEvent("GET_ITEM_INFO_RECEIVED")
     loader:SetScript("OnEvent", refresh)
 
+    -- The items cover the strip edge to edge. While an item is on the cursor they stop taking the mouse, so a
+    -- drop falls through to the strip itself, which is the one place that handles it.
+    local cursor = CreateFrame("Frame")
+    cursor:RegisterEvent("CURSOR_CHANGED")
+    cursor:SetScript("OnEvent", function() self:LetDropsThrough() end)
+
     frame:SetScript("OnUpdate", function(_, dt) self:Tick(dt) end)
 
     -- An item dropped on the strip is tracked and shown in the chart.
@@ -171,8 +177,7 @@ local function buildItem(self, index)
         if Stockist.ItemPicker.ClickIsDrop() then return end -- an item let go over it, not a click on it
         if b.itemID then self:Select(b.itemID) end
     end)
-    -- The items cover the strip edge to edge, so each one takes drops itself (the strip's own frame is under them).
-    Stockist.ItemPicker.AcceptDrops(btn, function(itemID) self:Drop(itemID) end)
+    btn:EnableMouse(not Stockist.ItemPicker.CarryingItem()) -- see Ticker:LetDropsThrough
     btn:SetScript("OnEnter", function(b)
         GameTooltip:SetOwner(b, "ANCHOR_BOTTOM")
         local _, short = Stockist.Help.Lines("ticker-item")
@@ -252,6 +257,7 @@ function Ticker:Refresh()
     end)
     self.tape:SetSize(math.max(1, self.loop * self.laps), 20)
     if not self.scrolling then self.offset = 0 end
+    self:LetDropsThrough() -- items built or redrawn while an item is carried must not take the mouse
     self:Place()
 end
 
@@ -267,6 +273,13 @@ function Ticker:Tick(dt)
     if self.frame:IsMouseOver() then return end
     self.offset = Ticker.Advance(self.offset, dt, SPEED, self.loop)
     self:Place()
+end
+
+--- Items take the mouse, except while the player carries an item: then the strip underneath gets it, so a drop
+--- anywhere on the strip lands on the strip.
+function Ticker:LetDropsThrough()
+    local carrying = Stockist.ItemPicker.CarryingItem()
+    for _, btn in ipairs(self.copies) do btn:EnableMouse(not carrying) end
 end
 
 --- Choose an item: show it in the chart. From a popped-out ticker that also opens the workspace if it is closed.

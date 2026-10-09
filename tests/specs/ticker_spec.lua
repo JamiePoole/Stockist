@@ -508,52 +508,56 @@ end
 
 local function endCursor() GetCursorInfo, ClearCursor = nil, nil end
 
-test("letting go of an item over one of the ticker's items tracks it, and does not select the item under it", function()
+test("while an item is carried the ticker's items stop taking the mouse, so a drop falls through to the strip", function()
     local S = setup()
     local t = tickerOf(S, 2000)
-    local over
-    for _, b in ipairs(visibleItems(t)) do if b.itemID == 7 then over = b end end
     local c = cursorWith(99)
-    Fake.fire(over, "OnReceiveDrag")
-    eq(S.tracked:Has(99), true, "the dropped item is now tracked")
-    eq(S.Link.Get("A"), 99, "and it is the one shown in the chart")
-    eq(c.cleared, 1, "the item went back to where it came from")
-    Fake.fire(over, "OnClick", "LeftButton") -- the click that follows the drop
-    eq(S.Link.Get("A"), 99, "the item under the cursor was not selected as well")
-    endCursor()
-    Fake.uninstall()
-end)
-
-test("a click-drop (mouse up, then click) over an item behaves the same", function()
-    local S = setup()
-    local t = tickerOf(S, 2000)
-    local over
-    for _, b in ipairs(visibleItems(t)) do if b.itemID == 8 then over = b end end
-    cursorWith(55)
-    Fake.fire(over, "OnMouseUp", "LeftButton")
-    Fake.fire(over, "OnClick", "LeftButton")
-    eq(S.tracked:Has(55), true)
-    eq(S.Link.Get("A"), 55, "the dropped item, not the one under the cursor")
-    endCursor()
-    Fake.uninstall()
-end)
-
-test("every lap's copy of an item takes drops, and so does the heading", function()
-    local S = setup()
-    S.tracked = S.Tracked.New({})
-    local t = tickerOf(S, 2000)
-    local cursor = cursorWith(1)
-    local count = 0
-    for _, b in ipairs(t.copies) do
-        if b.shown then
-            S.Link.Select("A", nil)
-            cursor.item = 40 + count
-            Fake.fire(b, "OnReceiveDrag")
-            eq(S.tracked:Has(40 + count), true, "copy " .. count)
-            count = count + 1
+    -- the ticker listens for the cursor changing: fire every CURSOR_CHANGED listener, as the game would
+    local fired = false
+    for _, o in ipairs(Fake.objects) do
+        if o.events and o.events["CURSOR_CHANGED"] then
+            Fake.fire(o, "OnEvent", "CURSOR_CHANGED")
+            if visibleItems(t)[1].mouseEnabled == false then fired = true break end
         end
     end
-    eq(count > 3, true, "several copies were tried, repeats and the market movers heading included")
+    eq(fired, true, "carrying an item turns the items' mouse off")
+    for _, b in ipairs(t.copies) do if b.shown then eq(b.mouseEnabled, false, "every copy") end end
+
+    Fake.fire(t.frame, "OnReceiveDrag") -- the drop lands on the strip beneath
+    eq(S.tracked:Has(99), true, "the dropped item is tracked")
+    eq(S.Link.Get("A"), 99, "and shown in the chart")
+    eq(c.cleared, 1, "the item went back where it came from")
+
+    for _, o in ipairs(Fake.objects) do
+        if o.events and o.events["CURSOR_CHANGED"] then Fake.fire(o, "OnEvent", "CURSOR_CHANGED") end
+    end
+    for _, b in ipairs(t.copies) do if b.shown then eq(b.mouseEnabled, true, "the mouse is back once the cursor is empty") end end
+    endCursor()
+    Fake.uninstall()
+end)
+
+test("a click-drop (mouse up on the strip) works the same, and nothing underneath is selected", function()
+    local S = setup()
+    local t = tickerOf(S, 2000)
+    cursorWith(55)
+    t:LetDropsThrough()
+    Fake.fire(t.frame, "OnMouseUp", "LeftButton")
+    eq(S.tracked:Has(55), true)
+    eq(S.Link.Get("A"), 55, "the dropped item, not one of the strip's items")
+    endCursor()
+    Fake.uninstall()
+end)
+
+test("items built while an item is carried start with the mouse off, and ordinary ones with it on", function()
+    local S = setup()
+    local t = tickerOf(S, 2000)
+    for _, b in ipairs(t.copies) do eq(b.mouseEnabled ~= false, true, "normal: they take the mouse") end
+    cursorWith(1)
+    S.tracked:Add(8)
+    for h = 47, 0, -1 do S.store:Add({ item = 60, ts = NOON - h * HOUR, price = 100 + (47 - h), qty = 1 }) end
+    S.tracked:Add(60)
+    S.Events:Fire("TRACKED_CHANGED", 60, true)
+    for _, b in ipairs(t.copies) do if b.shown then eq(b.mouseEnabled, false, "new or redrawn items are off while carrying") end end
     endCursor()
     Fake.uninstall()
 end)
