@@ -78,7 +78,9 @@ test("scan records one reading per trade-goods item, skipping other classes", fu
     flush()
 
     local ten = S.store:Latest(10)
-    eq(ten.min, 100); eq(ten.qty, 10); near(ten.price, 150)
+    eq(ten.min, 100); eq(ten.qty, 10)
+    eq(ten.price, 100, "the headline price is the lowest listed, as the Auction House shows it")
+    near(ten.med, 150, 1e-9) -- the median of the cheapest units is kept alongside
     eq(S.store:Latest(20).price, 777)
     is_nil(S.store:Latest(99))
     eq(S.store:GetMeta(10).class, 7)
@@ -445,4 +447,35 @@ test("rows with no item are only a sign the list is gone while the window is clo
     fire(frame, "REPLICATE_ITEM_LIST_UPDATE")
     flush()
     eq(events[#events][1], "SCAN_COMPLETE", "the scan went on past the odd row")
+end)
+
+test("the price a scan records is the cheapest listing, even when most units are dearer", function()
+    -- Pristine Leather as the player saw it: a few cheap units at the bottom, 229 units in all, most dearer
+    local auctions = {
+        { item = 10, count = 4, buyout = 4 * 146 },   -- 4 units at 1g46s-ish
+        { item = 10, count = 20, buyout = 20 * 150 },
+        { item = 10, count = 205, buyout = 205 * 179 }, -- most of the supply sits higher
+    }
+    local S, frame, events, flush = setup(auctions)
+    fire(frame, "AUCTION_HOUSE_SHOW")
+    fire(frame, "REPLICATE_ITEM_LIST_UPDATE")
+    flush()
+    local last = S.store:Latest(10)
+    eq(last.price, 146, "the headline is the lowest price")
+    eq(last.min, 146)
+    eq(last.med > 146, true, "the median of the cheapest units is higher, and kept separately")
+    eq(last.qty, 229, "and the listed quantity is the full count")
+end)
+
+test("the supply on the newest candle matches the latest scan's listing count, not an average of the hour", function()
+    local auctions = { { item = 10, count = 133, buyout = 133 * 150 } }
+    local S, frame, events, flush = setup(auctions, { now = 100000 })
+    fire(frame, "AUCTION_HOUSE_SHOW")
+    fire(frame, "REPLICATE_ITEM_LIST_UPDATE")
+    flush()
+    S.store:Add({ item = 10, ts = 100000 + 600, price = 140, qty = 229 }) -- a second scan in the same hour
+    local candles = S.store:GetCandles(10, "hourly")
+    eq(#candles, 1)
+    eq(candles[1].q, 229, "the bar reads what the latest scan found")
+    eq(S.store:Latest(10).qty, 229)
 end)

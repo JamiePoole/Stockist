@@ -20,7 +20,7 @@ test("Rollup.Merge takes open from earliest and close from latest, regardless of
     for _, m in ipairs({ S.Rollup.Merge(early, late), S.Rollup.Merge(late, early) }) do
         eq(m.o, 100); eq(m.c, 140); eq(m.h, 140); eq(m.l, 100)
         eq(m.ot, 5); eq(m.ct, 50); eq(m.n, 2)
-        near(m.q, 20)
+        eq(m.q, 30, "the supply shown is the latest reading's, whichever order they merge in")
     end
 end)
 

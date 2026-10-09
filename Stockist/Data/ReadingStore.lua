@@ -105,7 +105,8 @@ function Store:Ticks(itemID, fromTs)
     return out
 end
 
---- Record one reading { item, ts, price, min?, qty }. `price` is the headline price in copper.
+--- Record one reading { item, ts, price, min?, med?, qty }. `price` is the headline price in copper (the lowest
+--- listed); `med` is the median of the cheapest units, kept on the latest reading only.
 --- Returns false (and records nothing) if the reading is malformed.
 function Store:Add(reading)
     if not validReading(reading) then return false end
@@ -116,6 +117,7 @@ function Store:Add(reading)
             ts = reading.ts,
             price = reading.price,
             min = reading.min or reading.price,
+            med = reading.med,
             qty = reading.qty,
         }
     end

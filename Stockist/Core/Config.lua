@@ -4,7 +4,7 @@ local ADDON_NAME, Stockist = ...
 Stockist.Config = {
     scan = {
         minIntervalSec = 15 * 60, -- ReplicateItems is server-throttled to about once per 15 minutes
-        cheapestUnits = 200,      -- the headline price is the median of this many cheapest units
+        cheapestUnits = 200,      -- the median of this many cheapest units is kept as a steadier "market value"; the headline price is the lowest
         autoOnOpen = true,
     },
     -- How long price history is kept, in days. Tracked items (see Data/Tracked.lua) are kept longer

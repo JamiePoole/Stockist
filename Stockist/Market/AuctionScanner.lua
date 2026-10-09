@@ -172,8 +172,10 @@ function Scanner:Finish(tiersByItem, classes)
     local recorded = 0
     for itemID, tiers in pairs(tiersByItem) do
         local agg = Aggregate.Reduce(tiers, cfg.cheapestUnits)
+        -- The headline price is the lowest unit price listed: the figure the Auction House itself shows as the
+        -- price. The median of the cheapest units is kept alongside it (`med`) for a steadier "market value".
         if agg and Stockist.store:Add({
-            item = itemID, ts = now, price = agg.median, min = agg.min, qty = agg.qty,
+            item = itemID, ts = now, price = agg.min, min = agg.min, med = agg.median, qty = agg.qty,
         }) then
             recorded = recorded + 1
             local c = classes[itemID]
