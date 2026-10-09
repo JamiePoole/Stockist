@@ -108,6 +108,7 @@ local function buildRow(self, parent)
         GameTooltip:Hide()
     end)
     row:SetScript("OnClick", function(r)
+        if Stockist.ItemPicker.ClickIsDrop() then return end -- an item on the cursor is not a click on the row
         if r.itemID then self:Select(r.itemID) end
     end)
     return row

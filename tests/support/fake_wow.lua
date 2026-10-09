@@ -18,6 +18,7 @@ local function trackedMethods()
         IsShown = function(self) return self.shown end,
         IsVisible = function(self) return self.shown end,
         SetEnabled = function(self, v) self.enabled = v and true or false end,
+        EnableMouse = function(self, v) self.mouseEnabled = v ~= false end,
         Enable = function(self) self.enabled = true end,
         Disable = function(self) self.enabled = false end,
         IsEnabled = function(self) return self.enabled end,
