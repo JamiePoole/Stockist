@@ -12,7 +12,7 @@ local FILES = {
     "UI/Charts/Overlays/Overlays.lua", "UI/Charts/Core.lua", "UI/Charts/FrameCanvas.lua", "UI/Charts/ChartFrame.lua",
     "UI/Kit/Tooltip.lua", "UI/Kit/Button.lua", "UI/Kit/IconButton.lua", "UI/Kit/Guide.lua", "UI/Kit/Window.lua", "Features/PopOut.lua",
     "Features/PriceChart.lua", "Features/ItemPicker.lua", "Features/ChartPanel.lua", "Features/Watchlist.lua",
-    "Features/Ticker.lua", "Features/Movers.lua", "Features/Workspace.lua",
+    "Features/Ticker.lua", "Features/Movers.lua", "Features/StatusBar.lua", "Features/Workspace.lua",
 }
 
 local NAMES = { [7] = "Linen Cloth", [8] = "Mageweave Cloth", [9] = "Heart of Fire" }

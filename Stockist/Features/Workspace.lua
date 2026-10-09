@@ -15,9 +15,10 @@ Workspace.LAYOUTS = {
         name = "Trader",
         cells = {
             { id = "ticker", panel = "ticker", title = "Ticker", x = 0, y = 0, w = 1, h = 0.06, link = "A" },
-            { id = "watchlist", panel = "watchlist", title = "Watchlist", x = 0, y = 0.06, w = 0.27, h = 0.5, link = "A" },
-            { id = "movers", panel = "movers", title = "Movers", x = 0, y = 0.56, w = 0.27, h = 0.44, link = "A" },
-            { id = "chart", panel = "chart", title = "Price chart", x = 0.27, y = 0.06, w = 0.73, h = 0.94, link = "A" },
+            { id = "watchlist", panel = "watchlist", title = "Watchlist", x = 0, y = 0.06, w = 0.27, h = 0.47, link = "A" },
+            { id = "movers", panel = "movers", title = "Movers", x = 0, y = 0.53, w = 0.27, h = 0.41, link = "A" },
+            { id = "chart", panel = "chart", title = "Price chart", x = 0.27, y = 0.06, w = 0.73, h = 0.88, link = "A" },
+            { id = "status", panel = "status", title = "Status", x = 0, y = 0.94, w = 1, h = 0.06, link = "A" },
         },
     },
 }

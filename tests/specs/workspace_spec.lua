@@ -84,22 +84,27 @@ test("cells are placed by fraction and kept apart by the gap", function()
     local S = setup()
     local layout = S.Workspace.LAYOUTS.trader
     local rects = S.Workspace.CellRects(layout, 1000, 600, 6)
-    eq(#rects, 4)
+    eq(#rects, 5)
     local by = {}
     for _, rect in ipairs(rects) do by[rect.id] = rect end
-    eq(by.ticker ~= nil and by.watchlist ~= nil and by.movers ~= nil and by.chart ~= nil, true)
+    eq(by.ticker ~= nil and by.watchlist ~= nil and by.movers ~= nil and by.chart ~= nil and by.status ~= nil, true)
     -- ticker: a thin strip across the top (6% of the height)
     eq(by.ticker.x, 3); eq(by.ticker.y, 3); eq(by.ticker.w, 994); eq(by.ticker.h, 30)
     -- left column, 27% wide below the strip: the watchlist above the movers; chart: the rest
     eq(by.watchlist.x, 3); eq(by.watchlist.y, 39)
-    eq(by.watchlist.w, 264); eq(by.watchlist.h, 294)
+    eq(by.watchlist.w, 264); eq(by.watchlist.h, 276)
     eq(by.movers.x, 3); eq(by.movers.w, 264)
     eq(by.movers.y - (by.watchlist.y + by.watchlist.h), 6, "6px between the watchlist and the movers")
     eq(by.chart.x, 273)
     eq(by.chart.x - (by.watchlist.x + by.watchlist.w), 6, "6px between the column and the chart")
     eq(by.chart.x + by.chart.w, 997, "3px from the right edge")
     eq(by.watchlist.y - (by.ticker.y + by.ticker.h), 6, "6px below the strip")
-    eq(by.movers.y + by.movers.h, 597, "the column reaches the bottom")
+    eq(by.movers.y + by.movers.h, 561, "the column stops above the status bar")
+    eq(by.chart.y + by.chart.h, 561, "and so does the chart")
+    -- status bar: a thin strip across the bottom, like the ticker across the top
+    eq(by.status.x, 3); eq(by.status.w, 994); eq(by.status.h, 30)
+    eq(by.status.y - (by.movers.y + by.movers.h), 6, "6px below the panels")
+    eq(by.status.y + by.status.h, 597, "and it reaches the bottom")
     Fake.uninstall()
 end)
 
@@ -224,7 +229,7 @@ test("cells are laid out when the window opens, and again on the next frame and 
     for _, f in ipairs(Fake.frames) do
         if f.parent == content and f.size then sized[#sized + 1] = f end
     end
-    eq(#sized, 4)
+    eq(#sized, 5)
     local before = sized[4].size[1]
     content.size = { 2000, 800 }
     Fake.fire(content, "OnSizeChanged")
