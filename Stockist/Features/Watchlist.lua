@@ -117,6 +117,8 @@ local function buildRow(self, parent)
     row.recent:SetPoint("LEFT", row.price, "RIGHT", 8, 0)
     row.change = row:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall") -- the 24h move, quieter
     row.change:SetPoint("LEFT", row.recent, "RIGHT", 6, 0)
+    Format.UseMoveFont(row.recent)
+    Format.UseMoveFont(row.change)
 
     row:SetScript("OnEnter", function(r)
         r.hoverBg:Show()

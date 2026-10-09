@@ -93,16 +93,31 @@ local function sortName(id)
     return Stockist.ItemInfo.Name(id) or ("item:" .. id)
 end
 
---- One tape item as text: "Linen Cloth  1g 20s  +3.10%", with a grey label after the move when it does not
---- cover a full 24 hours ("+3.10% 9h", "+0.80% recent"). A heading is just its words.
-local function segmentText(seg)
-    if seg.heading then return Format.Colored(seg.heading, 0.6, 0.8, 1) end
-    local text = Stockist.ItemInfo.ColoredName(seg.id) .. "  " .. Format.MoneyDisplay(seg.price)
+--- One tape item as two texts: "Linen Cloth  1g 20s" and its move "▲3.10%", with a grey label after the move
+--- when it does not cover a full 24 hours ("▲3.10% 9h", "▲0.80% recent"). A heading is just its words. The
+--- move is a separate font string because it needs the chat font to draw the triangles.
+local function segmentTexts(seg)
+    if seg.heading then return Format.Colored(seg.heading, 0.6, 0.8, 1), "" end
+    local main = Stockist.ItemInfo.ColoredName(seg.id) .. "  " .. Format.MoneyDisplay(seg.price)
+    local move = ""
     if seg.move then
-        text = text .. "  " .. Format.Change(seg.move)
-        if seg.moveLabel then text = text .. " " .. Format.Colored(seg.moveLabel, 0.6, 0.63, 0.68) end
+        move = Format.Change(seg.move)
+        if seg.moveLabel then move = move .. " " .. Format.Colored(seg.moveLabel, 0.6, 0.63, 0.68) end
     end
-    return text
+    return main, move
+end
+
+--- Put an item's texts in its button and size the button to them. Returns the width of the texts.
+local function fill(btn, seg)
+    local main, move = segmentTexts(seg)
+    btn.itemID = seg.id -- nil for a heading
+    btn.label:SetText(main)
+    btn.move:SetText(move)
+    local w = btn.label:GetStringWidth()
+    local mw = btn.move:GetStringWidth()
+    if mw > 0 then w = w + 8 + mw end
+    btn:SetSize(w + GAP, 20)
+    return w
 end
 
 --- Create a ticker filling `parent`. `opts`: link (the group to select into), popOut (add a pop-out button).
@@ -165,6 +180,9 @@ local function buildItem(self, index)
     btn:RegisterForClicks("LeftButtonUp")
     btn.label = btn:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     btn.label:SetPoint("LEFT", 0, 0)
+    btn.move = btn:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    btn.move:SetPoint("LEFT", btn.label, "RIGHT", 8, 0)
+    Format.UseMoveFont(btn.move)
     btn:SetScript("OnClick", function(b)
         if b.itemID then self:Select(b.itemID) end
     end)
@@ -211,11 +229,8 @@ function Ticker:Refresh()
     local widths, starts = {}, {}
     for i, seg in ipairs(self.items) do
         local btn = self.copies[i] or buildItem(self, i)
-        btn.itemID = seg.id -- nil for a heading
-        btn.label:SetText(segmentText(seg))
-        local w = btn.label:GetStringWidth()
+        local w = fill(btn, seg)
         widths[i], starts[i] = w, x
-        btn:SetSize(w + GAP, 20)
         btn:ClearAllPoints()
         btn:SetPoint("LEFT", self.tape, "LEFT", x, 0)
         btn:Show()
@@ -229,9 +244,7 @@ function Ticker:Refresh()
         local idx = n + i
         local btn = self.copies[idx] or buildItem(self, idx)
         if self.scrolling then
-            btn.itemID = self.items[i].id
-            btn.label:SetText(segmentText(self.items[i]))
-            btn:SetSize(widths[i] + GAP, 20)
+            fill(btn, self.items[i])
             btn:ClearAllPoints()
             btn:SetPoint("LEFT", self.tape, "LEFT", self.loop + starts[i], 0)
             btn:Show()

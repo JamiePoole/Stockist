@@ -111,6 +111,15 @@ end
 -- Up and down triangles (U+25B2, U+25BC) as UTF-8 bytes, which the game's fonts draw.
 local UP, DOWN = "\226\150\178", "\226\150\188"
 
+--- The triangles in Format.Change are not in every game font (the panels' usual one lacks them; the chat
+--- font has them). Give a font string that will show a move the chat font at its own size.
+function Format.UseMoveFont(fontString)
+    local chat = _G.ChatFontNormal
+    local face = chat and chat.GetFont and chat:GetFont() or "Fonts\\ARIALN.TTF"
+    local _, size, flags = fontString:GetFont()
+    fontString:SetFont(face, size or 12, flags or "")
+end
+
 --- A move as the markets show it: a green up triangle or red down triangle and the size, "▲3.10%" or
 --- "▼0.42%". A move that rounds to nothing is a plain grey "0.00%". Nil gives "".
 function Format.Change(p)

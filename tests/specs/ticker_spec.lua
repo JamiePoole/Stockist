@@ -95,8 +95,8 @@ test("each tracked item with a price becomes one item on the tape: name, price, 
     local seven
     for _, b in ipairs(items) do if b.itemID == 7 then seven = b end end
     eq(seven.label.text:find("Linen Cloth", 1, true) ~= nil, true, "the name")
-    eq(seven.label.text:find("%", 1, true) ~= nil, true, "and the move")
-    eq(seven.label.text:find("|cff33c773", 1, true) ~= nil, true, "item 7 rose: green")
+    eq(seven.move.text:find("%", 1, true) ~= nil, true, "and the move, in its own font string")
+    eq(seven.move.text:find("|cff33c773", 1, true) ~= nil, true, "item 7 rose: green")
     eq(t.empty.shown, false)
     Fake.uninstall()
 end)
@@ -303,7 +303,7 @@ test("the tape shows the move even when the history is short", function()
     for h = 15, 0, -1 do S.store:Add({ item = 30, ts = NOON - h * HOUR, price = 1000 + (15 - h) * 10, qty = 1 }) end
     S.tracked:Add(30)
     local t = tickerOf(S, 2000)
-    local text = visibleItems(t)[1].label.text
+    local text = visibleItems(t)[1].move.text
     eq(text:find("%", 1, true) ~= nil, true, text)
     eq(text:find("15h", 1, true) ~= nil, true, "labelled with what it covers: " .. text)
     Fake.uninstall()
@@ -420,5 +420,40 @@ end)
 test("every help key the ticker uses has a topic", function()
     local S = setup()
     for _, key in ipairs(S.Ticker.HELP_KEYS) do eq(S.Help.topics:Get(key) ~= nil, true, key) end
+    Fake.uninstall()
+end)
+
+test("the move is drawn in the chat font, because the panels' usual font has no triangles", function()
+    local S = setup()
+    local calls = {}
+    local fs = { GetFont = function() return "Fonts\\FRIZQT__.TTF", 13, "OUTLINE" end,
+        SetFont = function(_, face, size, flags) calls[#calls + 1] = { face, size, flags } end }
+    S.Format.UseMoveFont(fs)
+    eq(calls[1][1], "Fonts\\ARIALN.TTF", "the narrow Latin font when there is no chat font object")
+    eq(calls[1][2], 13, "same size"); eq(calls[1][3], "OUTLINE", "same flags")
+
+    ChatFontNormal = { GetFont = function() return "Interface\\Custom\\Chat.ttf", 14, "" end }
+    S.Format.UseMoveFont(fs)
+    eq(calls[2][1], "Interface\\Custom\\Chat.ttf", "the player's own chat font when there is one")
+    ChatFontNormal = nil
+
+    local bare = { GetFont = function() end, SetFont = function(_, _, size) calls[3] = size end }
+    S.Format.UseMoveFont(bare)
+    eq(calls[3], 12, "a font string with no size reported still gets one")
+    Fake.uninstall()
+end)
+
+test("every move text in the ticker, watchlist and chart header gets that font", function()
+    local S = setup()
+    local used = {}
+    local real = S.Format.UseMoveFont
+    S.Format.UseMoveFont = function(fs) used[fs] = true; return real(fs) end
+    local t = tickerOf(S, 2000)
+    local list = S.Watchlist.Create(UIParent, { link = "A" })
+    list.list:SetSize(220, 300); list:Refresh()
+    local chart = S.ChartPanel.Create(UIParent)
+    for _, b in ipairs(t.copies) do eq(used[b.move], true, "ticker item") end
+    for _, row in ipairs(list.rowFrames) do eq(used[row.recent] and used[row.change], true, "watchlist row") end
+    eq(used[chart.changeText] and used[chart.recentText], true, "chart header")
     Fake.uninstall()
 end)
