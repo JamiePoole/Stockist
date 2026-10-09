@@ -16,6 +16,23 @@ function Format.Money(copper)
     return table.concat(parts, " ")
 end
 
+--- The other way: "1g20s5c", "5s", "12g", "250c", "1g 5s" -> copper. Nil for anything else; a bare number is
+--- refused on purpose, because "5" could be five copper or five silver and the player must say which.
+function Format.ParseMoney(text)
+    text = (text or ""):lower():gsub("%s+", "")
+    if text == "" then return nil end
+    local value = { g = 10000, s = 100, c = 1 }
+    local total, seen, rest = 0, {}, text
+    while rest ~= "" do
+        local number, unit, tail = rest:match("^(%d+%.?%d*)([gsc])(.*)$")
+        if not number or seen[unit] then return nil end
+        seen[unit] = true
+        total = total + tonumber(number) * value[unit]
+        rest = tail
+    end
+    return math.floor(total + 0.5)
+end
+
 -- Coin colours as in the game's money display.
 local GOLD, SILVER, COPPER = { 1, 0.82, 0 }, { 0.78, 0.78, 0.81 }, { 0.93, 0.65, 0.37 }
 
