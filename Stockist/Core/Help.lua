@@ -46,6 +46,24 @@ function Help.Legend()
     return table.concat(key, "\n"), table.concat(tips, "\n")
 end
 
+--- The written guide for a panel as one colour-coded text, for the panel to show at its foot in tutorial mode:
+--- a white heading, a key (gold labels, grey descriptions), then a blue "what it might mean" section of general
+--- hints. Nil if the panel has no guide. Guides are registered in Help.guides (see Core/HelpTopics.lua).
+Help.guides = Help.guides or {}
+function Help.Guide(name)
+    local G = Help.guides[name]
+    if not G then return nil end
+    local lines = { WHITE .. G.title .. "|r" }
+    for _, entry in ipairs(G.key) do
+        lines[#lines + 1] = GOLD .. entry[1] .. "|r  " .. GREY .. entry[2] .. "|r"
+    end
+    lines[#lines + 1] = BLUE_HEAD .. G.tipsTitle .. "|r"
+    for _, tip in ipairs(G.tips) do
+        lines[#lines + 1] = BLUE .. "- " .. tip .. "|r"
+    end
+    return table.concat(lines, "\n")
+end
+
 --- title, short, detail for a topic. `detail` is nil unless tutorial mode is on. Returns nil for
 --- an unknown key.
 function Help.Lines(key)

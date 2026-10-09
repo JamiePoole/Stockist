@@ -42,6 +42,7 @@ UI\Charts\ChartFrame.lua
 UI\Kit\Tooltip.lua
 UI\Kit\Button.lua
 UI\Kit\IconButton.lua
+UI\Kit\Guide.lua
 UI\Kit\Window.lua
 Features\PopOut.lua
 Features\PriceChart.lua

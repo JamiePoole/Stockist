@@ -43,6 +43,15 @@ Answers "is it worth cancelling?". For each of your listings: your price, the lo
 
 Margin = sale price of the product minus the cost of its reagents (minus the AH cut), charted over time like any item. Our price history already covers reagents and products. Open question: where recipe and reagent data comes from on Forever (`C_TradeSkillUI`, or a bundled recipe table). Needs a probe before design.
 
+## Tutorial guides
+
+Every panel explains itself in plain words while tutorial mode is on (the `?` in a window's title bar), and the explanations are the same ones whether the panel sits in the workspace or in a pop-out. Two layers:
+
+- **Hover tooltips** (Help topics): a one-line title and description always, with a longer explanation added in tutorial mode.
+- **A written guide at the panel's foot** (`UI/Kit/Guide.lua`, text from `Help.guides` in `Core/HelpTopics.lua`): what the numbers mean, then "what it might mean" in general terms, in the chart legend's colours. It is only shown when there is room (it never takes the last two rows of a list) and is cut off rather than squeezing the panel's real content.
+
+The tone is hints, not advice: "a big rise can mean ...; if you hold some it may be a moment to sell", never an instruction. A new panel type is not finished without its topics and, where it has numbers to read, a guide. Done so far: price chart (legend), watchlist, movers; the ticker explains itself through its tooltips.
+
 ## Components
 
 ```text

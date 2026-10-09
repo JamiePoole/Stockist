@@ -17,6 +17,7 @@ local SECTION_HEIGHT = 18
 local HEADER_HEIGHT = 26
 local MAX_PER_SECTION = 10
 local MIN_MOVE = 0.005 -- a move smaller than this rounds to nothing and is not listed
+local MIN_LIST_ROWS = 2   -- the guide never takes the room of the last two rows of each list
 
 ---------------------------------------------------------------------------------------------------
 -- Pure part
@@ -53,10 +54,16 @@ function Movers.Compute(store, ids, now, nameOf, limit)
     return { risers = head(up), fallers = head(down) }
 end
 
---- How many rows each of the two lists gets in a panel `height` pixels tall.
-function Movers.Capacity(height)
-    local room = height - HEADER_HEIGHT - 2 * SECTION_HEIGHT - 6
+--- How many rows each of the two lists gets in a panel `height` pixels tall, with `reserved` pixels kept at the
+--- foot for the guide.
+function Movers.Capacity(height, reserved)
+    local room = height - (reserved or 0) - HEADER_HEIGHT - 2 * SECTION_HEIGHT - 6
     return math.max(1, math.min(MAX_PER_SECTION, math.floor(room / 2 / ROW_HEIGHT)))
+end
+
+--- The most height the guide may take: what is left once each list keeps MIN_LIST_ROWS rows.
+function Movers.GuideRoom(height)
+    return height - HEADER_HEIGHT - 2 * SECTION_HEIGHT - 6 - 2 * MIN_LIST_ROWS * ROW_HEIGHT
 end
 
 ---------------------------------------------------------------------------------------------------
@@ -140,6 +147,8 @@ function Movers.Create(parent, opts)
     end)
     Stockist.UI.Tooltip.Attach(self.trackedButton, "movers-tracked")
 
+    self.guide = Stockist.UI.Guide.Create(frame, "movers")
+
     self.riseHead = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     self.riseHead:SetTextColor(0.2, 0.78, 0.45)
     self.riseHead:SetText("Rising")
@@ -165,6 +174,7 @@ function Movers.Create(parent, opts)
     frame:SetScript("OnSizeChanged", refresh)
     Stockist.Events:On("SCAN_COMPLETE", refresh, self)
     Stockist.Events:On("TRACKED_CHANGED", refresh, self)
+    Stockist.Events:On("TUTORIAL_CHANGED", refresh, self)
     local loader = CreateFrame("Frame")
     loader:RegisterEvent("GET_ITEM_INFO_RECEIVED")
     loader:SetScript("OnEvent", refresh)
@@ -205,7 +215,9 @@ end
 function Movers:Refresh()
     if not (Stockist.store and Stockist.tracked) then return end
     local now = Stockist.Clock.now()
-    local capacity = Movers.Capacity(self.frame:GetHeight())
+    local height = self.frame:GetHeight()
+    local reserved = self.guide:Fit(Movers.GuideRoom(height)) -- the guide, in tutorial mode, if there is room
+    local capacity = Movers.Capacity(height, reserved)
     local ids = self.onlyTracked and Stockist.tracked:List() or Stockist.store:Items()
     local data = Movers.Compute(Stockist.store, ids, now, sortName, capacity)
 
