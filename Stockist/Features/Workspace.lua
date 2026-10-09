@@ -115,6 +115,12 @@ function Workspace.IsShown()
     return win ~= nil and win.frame:IsShown()
 end
 
+--- Make sure the workspace is open, for something chosen in a panel that lives outside it (a popped-out
+--- ticker, say): the chart that shows the choice is in the workspace. Does nothing if it is already open.
+function Workspace.Reveal()
+    if not Workspace.IsShown() then Workspace.Show() end
+end
+
 local function open(arg)
     local id
     if arg ~= "" then

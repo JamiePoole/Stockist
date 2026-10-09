@@ -51,7 +51,8 @@ end
 
 --- One row per tracked item, sorted by name: { id, name, price, change, age, spark }.
 --- `price`, `change` and `age` are nil for an item with no readings. `nameOf(id)` gives the sort name.
-function Watchlist.Rows(store, ids, now, nameOf)
+--- `lite` leaves out the price line (`spark`), for callers that only need the numbers.
+function Watchlist.Rows(store, ids, now, nameOf, lite)
     local rows = {}
     for _, id in ipairs(ids) do
         local last = store:Latest(id)
@@ -62,7 +63,7 @@ function Watchlist.Rows(store, ids, now, nameOf)
             recent = last and (store:SmoothedChange(id, Stockist.PriceChart.RECENT_WINDOW)) or nil,
             change = last and store:Change(id, 86400, now) or nil,
             age = last and (now - last.ts) or nil,
-            spark = last and sparkPoints(store, id, now) or {},
+            spark = (last and not lite) and sparkPoints(store, id, now) or {},
         }
     end
     table.sort(rows, function(a, b)
@@ -213,7 +214,9 @@ end
 
 --- Select an item in this panel's link group (so linked panels follow).
 function Watchlist:Select(itemID)
-    if self.link then Stockist.Link.Select(self.link, itemID) end
+    if not self.link then return end
+    Stockist.Link.Select(self.link, itemID)
+    Stockist.Workspace.Reveal() -- from a popped-out watchlist, show the choice
 end
 
 --- An item was dropped on the panel: track it if it is not tracked yet, and select it for the group.

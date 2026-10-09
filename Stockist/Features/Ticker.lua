@@ -1,7 +1,7 @@
 local ADDON_NAME, Stockist = ...
 
--- The ticker: a thin strip that scrolls your tracked items past, each with its price and 24h move, like the
--- tape on a trading screen. It is built to be small enough to leave on screen on its own (pop it out). Hover
+-- The ticker: a thin strip that scrolls your tracked items past, each with its price and its move, like the
+-- tape on a trading screen. With nothing tracked it scrolls the biggest movers on the market instead. It is built to be small enough to leave on screen on its own (pop it out). Hover
 -- to pause it; click an item to show it in the chart (the panel's link group). Drop an item on it to track it.
 -- When everything fits it stands still instead of scrolling. Segments and scrolling maths are pure.
 local Format = Stockist.Format
@@ -16,19 +16,56 @@ local SPEED = 38        -- pixels per second
 local GAP = 36          -- space between one item and the next
 local EDGE = 8          -- left margin when the tape stands still
 local BUTTON_ROOM = 32  -- kept clear on the right for the pop-out button
+local MOVERS = 20       -- the number of biggest movers shown when nothing is tracked
 
 ---------------------------------------------------------------------------------------------------
 -- Pure part
 ---------------------------------------------------------------------------------------------------
 
---- The items to show, in name order: { id, name, price, change } for each tracked item that has a price.
+--- The items to show, in the order of `rows`: { id, name, price } for each one that has a price.
 --- Reuses the watchlist's rows, so both lists agree.
 function Ticker.Segments(rows)
     local out = {}
     for _, row in ipairs(rows) do
-        if row.price then out[#out + 1] = { id = row.id, name = row.name, price = row.price, change = row.change } end
+        if row.price then out[#out + 1] = { id = row.id, name = row.name, price = row.price } end
     end
     return out
+end
+
+--- The biggest movers among `rows` (any items with prices): the `limit` with the largest move, up or down,
+--- by their 24h move or, lacking that, their recent move. Items that have not moved at all, or have no
+--- move to measure, are left out. Shown in name order, like a tracked list.
+function Ticker.MoverSegments(rows, limit)
+    local scored = {}
+    for _, row in ipairs(rows) do
+        local move = row.change or row.recent
+        if row.price and move and move ~= 0 then scored[#scored + 1] = { row = row, size = math.abs(move) } end
+    end
+    table.sort(scored, function(a, b)
+        if a.size ~= b.size then return a.size > b.size end
+        return a.row.id < b.row.id
+    end)
+    local picked = {}
+    for i = 1, math.min(limit, #scored) do picked[#picked + 1] = scored[i].row end
+    table.sort(picked, function(a, b)
+        local x, y = a.name:lower(), b.name:lower()
+        if x ~= y then return x < y end
+        return a.id < b.id
+    end)
+    return Ticker.Segments(picked)
+end
+
+--- The move to show for an item: over the last 24 hours (or as far back as we hold, if that is at least
+--- half a day, labelled with how far), otherwise the recent move, labelled "recent". Returns percent and
+--- the label to show beside it (nil for a plain 24h move); nil when there is nothing to measure.
+function Ticker.Move(store, itemID, now)
+    local parts = Stockist.PriceChart.HeaderParts(store, itemID, now, "1D")
+    if not parts then return nil end
+    if parts.change then
+        return parts.change, parts.changeLabel ~= "24h" and parts.changeLabel or nil
+    end
+    if parts.recent then return parts.recent, "recent" end
+    return nil
 end
 
 --- Whether the tape has to scroll: it does when its items are wider than the room.
@@ -54,10 +91,15 @@ local function sortName(id)
     return Stockist.ItemInfo.Name(id) or ("item:" .. id)
 end
 
---- One tape item as text: "Linen Cloth  1g 20s  +3.10%".
+--- One tape item as text: "Linen Cloth  1g 20s  +3.10%", with a grey label after the move when it does not
+--- cover a full 24 hours ("+3.10% 9h", "+0.80% recent"). A heading is just its words.
 local function segmentText(seg)
+    if seg.heading then return Format.Colored(seg.heading, 0.6, 0.8, 1) end
     local text = Stockist.ItemInfo.ColoredName(seg.id) .. "  " .. Format.MoneyDisplay(seg.price)
-    if seg.change then text = text .. "  " .. Format.Change(seg.change) end
+    if seg.move then
+        text = text .. "  " .. Format.Change(seg.move)
+        if seg.moveLabel then text = text .. " " .. Format.Colored(seg.moveLabel, 0.6, 0.63, 0.68) end
+    end
     return text
 end
 
@@ -91,7 +133,7 @@ function Ticker.Create(parent, opts)
     self.empty = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     self.empty:SetPoint("LEFT", EDGE, 0)
     self.empty:SetTextColor(0.7, 0.72, 0.78)
-    self.empty:SetText("Nothing tracked yet: track items in the watchlist and they scroll past here.")
+    self.empty:SetText("No prices yet: open the Auction House for a first scan, then tracked items (or the biggest movers) scroll past here.")
 
     local function refresh()
         if frame:IsVisible() then self:Refresh() else self.stale = true end
@@ -122,7 +164,7 @@ local function buildItem(self, index)
     btn.label = btn:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     btn.label:SetPoint("LEFT", 0, 0)
     btn:SetScript("OnClick", function(b)
-        if b.itemID and self.link then Stockist.Link.Select(self.link, b.itemID) end
+        if b.itemID then self:Select(b.itemID) end
     end)
     btn:SetScript("OnEnter", function(b)
         GameTooltip:SetOwner(b, "ANCHOR_BOTTOM")
@@ -140,8 +182,18 @@ end
 function Ticker:Refresh()
     if not (Stockist.store and Stockist.tracked) then return end
     local now = Stockist.Clock.now()
-    local rows = Stockist.Watchlist.Rows(Stockist.store, Stockist.tracked:List(), now, sortName)
-    self.items = Ticker.Segments(rows)
+    local ids = Stockist.tracked:List()
+    if #ids > 0 then
+        self.items = Ticker.Segments(Stockist.Watchlist.Rows(Stockist.store, ids, now, sortName, true))
+    else
+        -- Nothing tracked: show what is moving most across the market, under a heading saying so.
+        local rows = Stockist.Watchlist.Rows(Stockist.store, Stockist.store:Items(), now, sortName, true)
+        self.items = Ticker.MoverSegments(rows, MOVERS)
+        if #self.items > 0 then table.insert(self.items, 1, { heading = "Biggest movers" }) end
+    end
+    for _, seg in ipairs(self.items) do
+        if seg.id then seg.move, seg.moveLabel = Ticker.Move(Stockist.store, seg.id, now) end
+    end
     self.empty:SetShown(#self.items == 0)
 
     -- Lay one copy of the items out, measuring as we go; a second copy follows when the tape scrolls.
@@ -149,7 +201,7 @@ function Ticker:Refresh()
     local widths, starts = {}, {}
     for i, seg in ipairs(self.items) do
         local btn = self.copies[i] or buildItem(self, i)
-        btn.itemID = seg.id
+        btn.itemID = seg.id -- nil for a heading
         btn.label:SetText(segmentText(seg))
         local w = btn.label:GetStringWidth()
         widths[i], starts[i] = w, x
@@ -198,6 +250,13 @@ function Ticker:Tick(dt)
     self:Place()
 end
 
+--- Choose an item: show it in the chart. From a popped-out ticker that also opens the workspace if it is closed.
+function Ticker:Select(itemID)
+    if not self.link then return end
+    Stockist.Link.Select(self.link, itemID)
+    Stockist.Workspace.Reveal()
+end
+
 --- Open the ticker in a window of its own; it keeps this panel's link group.
 function Ticker:PopOut()
     Stockist.PopOut.Open("ticker", { link = self.link })
@@ -216,7 +275,7 @@ function Ticker:SetItem() end
 function Ticker:Drop(itemID)
     if Stockist.ItemInfo.Exists(itemID) == false then return end
     if Stockist.tracked:Add(itemID) then Stockist.Events:Fire("TRACKED_CHANGED", itemID, true) end
-    if self.link then Stockist.Link.Select(self.link, itemID) end
+    self:Select(itemID)
 end
 
 function Ticker:Destroy()

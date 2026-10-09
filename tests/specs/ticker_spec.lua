@@ -58,7 +58,7 @@ test("segments are the tracked items that have a price, in the order given", fun
     local segs = S.Ticker.Segments(rows)
     eq(#segs, 2, "item 9 has no price, so it is left out")
     eq(segs[1].name < segs[2].name or segs[1].name == segs[2].name, true, "sorted by name")
-    eq(segs[1].price ~= nil and segs[1].change ~= nil, true)
+    eq(segs[1].price ~= nil, true)
     Fake.uninstall()
 end)
 
@@ -179,13 +179,125 @@ test("clicking an item selects it in the panel's link group", function()
     Fake.uninstall()
 end)
 
-test("with nothing tracked it says how to fill it, and does not scroll", function()
+test("with nothing tracked it shows the biggest movers on the market, under a heading", function()
     local S = setup()
     S.tracked = S.Tracked.New({})
+    local t = tickerOf(S, 2000)
+    eq(t.empty.shown, false)
+    eq(t.items[1].heading, "Biggest movers")
+    local ids = {}
+    for _, b in ipairs(t.copies) do if b.shown and b.itemID then ids[#ids + 1] = b.itemID end end
+    table.sort(ids)
+    eq(ids[1], 7); eq(ids[2], 8, "both items with a price and a move")
+    eq(t.copies[1].itemID, nil, "the heading is not clickable")
+    Fake.fire(t.copies[1], "OnClick", "LeftButton")
+    eq(S.Link.Get("A"), nil, "clicking the heading selects nothing")
+    Fake.uninstall()
+end)
+
+test("with no prices at all it says how to get some, and does not scroll", function()
+    local S = setup()
+    S.tracked = S.Tracked.New({})
+    S.store = S.ReadingStore.New({})
     local t = tickerOf(S, 120)
     eq(t.empty.shown, true)
     eq(t.scrolling, false)
     eq(#visibleItems(t), 0)
+    Fake.uninstall()
+end)
+
+test("tracking something replaces the movers with your own items", function()
+    local S = setup()
+    S.tracked = S.Tracked.New({})
+    local t = tickerOf(S, 2000)
+    eq(t.items[1].heading, "Biggest movers")
+    S.tracked:Add(7)
+    S.Events:Fire("TRACKED_CHANGED", 7, true)
+    eq(t.items[1].heading, nil)
+    eq(#t.items, 1); eq(t.items[1].id, 7)
+    Fake.uninstall()
+end)
+
+test("movers: the largest moves up or down, up to the limit, zero and unmeasurable ones left out", function()
+    local S = setup()
+    local rows = {
+        { id = 1, name = "a", price = 10, change = 5 },
+        { id = 2, name = "b", price = 10, change = -12 },
+        { id = 3, name = "c", price = 10, change = 0.5 },
+        { id = 4, name = "d", price = 10, change = 0 },
+        { id = 5, name = "e", price = 10 },                    -- nothing to measure
+        { id = 6, name = "f", price = 10, recent = -7 },        -- only a recent move: still counts
+        { id = 7, name = "g", change = 50 },                    -- no price
+    }
+    local segs = S.Ticker.MoverSegments(rows, 3)
+    local ids = {}
+    for _, g in ipairs(segs) do ids[#ids + 1] = g.id end
+    eq(table.concat(ids, ","), "1,2,6", "the three biggest, shown in name order")
+    eq(#S.Ticker.MoverSegments(rows, 10), 4, "unmoved, unmeasured and priceless ones never appear")
+    eq(#S.Ticker.MoverSegments({}, 5), 0)
+    Fake.uninstall()
+end)
+
+test("an item's move is its 24h change, a labelled shorter one when history is short, else the recent move", function()
+    local S = setup()
+    local pct, label = S.Ticker.Move(S.store, 7, NOON)
+    eq(pct > 0, true); eq(label, nil, "a plain 24h move has no label")
+
+    for h = 15, 0, -1 do S.store:Add({ item = 30, ts = NOON - h * HOUR, price = 1000 + (15 - h) * 10, qty = 1 }) end
+    pct, label = S.Ticker.Move(S.store, 30, NOON)
+    eq(pct > 0, true); eq(label, "15h", "only 15 hours of history: it says so")
+
+    for i = 1, 5 do S.store:Add({ item = 31, ts = NOON - (6 - i) * 900, price = 1000, qty = 1 }) end
+    S.store:Add({ item = 31, ts = NOON, price = 1100, qty = 1 })
+    pct, label = S.Ticker.Move(S.store, 31, NOON)
+    near(pct, 10, 1e-6); eq(label, "recent", "under half a day: the recent move")
+
+    S.store:Add({ item = 32, ts = NOON, price = 100, qty = 1 })
+    eq(S.Ticker.Move(S.store, 32, NOON), nil, "one reading: nothing to measure")
+    eq(S.Ticker.Move(S.store, 999, NOON), nil, "no readings")
+    Fake.uninstall()
+end)
+
+test("the tape shows the move even when the history is short", function()
+    local S = setup()
+    S.tracked = S.Tracked.New({})
+    for h = 15, 0, -1 do S.store:Add({ item = 30, ts = NOON - h * HOUR, price = 1000 + (15 - h) * 10, qty = 1 }) end
+    S.tracked:Add(30)
+    local t = tickerOf(S, 2000)
+    local text = visibleItems(t)[1].label.text
+    eq(text:find("%", 1, true) ~= nil, true, text)
+    eq(text:find("15h", 1, true) ~= nil, true, "labelled with what it covers: " .. text)
+    Fake.uninstall()
+end)
+
+test("choosing an item from a popped-out ticker or watchlist opens the workspace if it is closed", function()
+    local S = setup()
+    local t = tickerOf(S, 2000)
+    eq(S.Workspace.IsShown(), false)
+    Fake.fire(visibleItems(t)[1], "OnClick", "LeftButton")
+    eq(S.Workspace.IsShown(), true, "the ticker opened it")
+    eq(S.Link.Get("A") ~= nil, true)
+
+    StockistWorkspace:Hide()
+    local list = S.Watchlist.Create(UIParent, { link = "A" })
+    list.list:SetSize(220, 300); list:Refresh()
+    local row
+    for _, r in ipairs(list.rowFrames) do if r.itemID == 8 then row = r end end
+    Fake.fire(row, "OnClick", "LeftButton")
+    eq(S.Workspace.IsShown(), true, "and so did the watchlist")
+    eq(S.Link.Get("A"), 8)
+    Fake.uninstall()
+end)
+
+test("choosing an item while the workspace is already open does not touch it", function()
+    local S = setup()
+    S.Workspace.Show(7)
+    local shows = 0
+    local real = S.Workspace.Show
+    S.Workspace.Show = function(...) shows = shows + 1; return real(...) end
+    local t = tickerOf(S, 2000)
+    Fake.fire(visibleItems(t)[1], "OnClick", "LeftButton")
+    eq(shows, 0)
     Fake.uninstall()
 end)
 
