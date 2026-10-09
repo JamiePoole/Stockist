@@ -179,12 +179,22 @@ test("clicking an item selects it in the panel's link group", function()
     Fake.uninstall()
 end)
 
+-- ids of the items the player tracks (everything before the "Market movers" heading)
+local function mine(t)
+    local out = {}
+    for _, seg in ipairs(t.items) do
+        if seg.heading then break end
+        out[#out + 1] = seg.id
+    end
+    return out
+end
+
 test("with nothing tracked it shows the biggest movers on the market, under a heading", function()
     local S = setup()
     S.tracked = S.Tracked.New({})
     local t = tickerOf(S, 2000)
     eq(t.empty.shown, false)
-    eq(t.items[1].heading, "Biggest movers")
+    eq(t.items[1].heading, "Market movers")
     local ids = {}
     for _, b in ipairs(t.copies) do if b.shown and b.itemID then ids[#ids + 1] = b.itemID end end
     table.sort(ids)
@@ -206,15 +216,44 @@ test("with no prices at all it says how to get some, and does not scroll", funct
     Fake.uninstall()
 end)
 
-test("tracking something replaces the movers with your own items", function()
+test("your own items come first, then market movers top the strip up while there are few of them", function()
     local S = setup()
     S.tracked = S.Tracked.New({})
     local t = tickerOf(S, 2000)
-    eq(t.items[1].heading, "Biggest movers")
+    eq(t.items[1].heading, "Market movers")
     S.tracked:Add(7)
     S.Events:Fire("TRACKED_CHANGED", 7, true)
-    eq(t.items[1].heading, nil)
-    eq(#t.items, 1); eq(t.items[1].id, 7)
+    eq(t.items[1].id, 7, "yours first")
+    eq(t.items[2].heading, "Market movers")
+    eq(t.items[3].id, 8, "then the movers")
+    for _, seg in ipairs(t.items) do
+        if seg.id == 7 then eq(seg == t.items[1], true, "an item you track is not repeated among the movers") end
+    end
+    Fake.uninstall()
+end)
+
+test("with enough items of your own there are no market movers", function()
+    local S = setup()
+    S.tracked = S.Tracked.New({})
+    for id = 40, 46 do
+        for h = 47, 0, -1 do S.store:Add({ item = id, ts = NOON - h * HOUR, price = 100 + id + (47 - h), qty = 1 }) end
+        S.tracked:Add(id)
+    end
+    local t = tickerOf(S, 2000)
+    eq(#t.items, 7)
+    for _, seg in ipairs(t.items) do eq(seg.heading, nil) end
+    Fake.uninstall()
+end)
+
+test("the strip is topped up so there is always something to scroll", function()
+    local S = setup()
+    S.tracked = S.Tracked.New({})
+    S.tracked:Add(7)
+    for id = 50, 62 do
+        for h = 47, 0, -1 do S.store:Add({ item = id, ts = NOON - h * HOUR, price = 100 + (47 - h) * id, qty = 1 }) end
+    end
+    local t = tickerOf(S, 700)
+    eq(t.scrolling, true, "one tracked item alone would stand still; with movers it scrolls")
     Fake.uninstall()
 end)
 
@@ -306,11 +345,11 @@ test("it follows tracking changes, and drops items that are no longer tracked", 
     local t = tickerOf(S, 2000)
     S.tracked:Remove(8)
     S.Events:Fire("TRACKED_CHANGED", 8, false)
-    eq(#visibleItems(t), 1)
+    eq(table.concat(mine(t), ","), "7")
     for h = 47, 0, -1 do S.store:Add({ item = 20, ts = NOON - h * HOUR, price = 500, qty = 1 }) end
     S.tracked:Add(20)
     S.Events:Fire("TRACKED_CHANGED", 20, true)
-    eq(#visibleItems(t), 2)
+    eq(table.concat(mine(t), ","), "20,7", "name order")
     Fake.uninstall()
 end)
 
@@ -331,10 +370,10 @@ test("a hidden ticker catches up when shown", function()
     t.frame.shown = false
     S.tracked:Remove(8)
     S.Events:Fire("TRACKED_CHANGED", 8, false)
-    eq(#visibleItems(t), 2, "not redrawn while hidden")
+    eq(table.concat(mine(t), ","), "7,8", "not redrawn while hidden")
     t.frame.shown = true
     Fake.fire(t.frame, "OnShow")
-    eq(#visibleItems(t), 1)
+    eq(table.concat(mine(t), ","), "7")
     Fake.uninstall()
 end)
 

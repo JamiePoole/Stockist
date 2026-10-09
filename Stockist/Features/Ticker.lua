@@ -1,7 +1,8 @@
 local ADDON_NAME, Stockist = ...
 
 -- The ticker: a thin strip that scrolls your tracked items past, each with its price and its move, like the
--- tape on a trading screen. With nothing tracked it scrolls the biggest movers on the market instead. It is built to be small enough to leave on screen on its own (pop it out). Hover
+-- tape on a trading screen. With only a few items tracked it is topped up with the biggest movers on the
+-- market, so there is always something moving past. It is built to be small enough to leave on screen on its own (pop it out). Hover
 -- to pause it; click an item to show it in the chart (the panel's link group). Drop an item on it to track it.
 -- When everything fits it stands still instead of scrolling. Segments and scrolling maths are pure.
 local Format = Stockist.Format
@@ -16,7 +17,8 @@ local SPEED = 38        -- pixels per second
 local GAP = 36          -- space between one item and the next
 local EDGE = 8          -- left margin when the tape stands still
 local BUTTON_ROOM = 32  -- kept clear on the right for the pop-out button
-local MOVERS = 20       -- the number of biggest movers shown when nothing is tracked
+local MOVERS = 20       -- the number of biggest movers added to a short list
+local FILL_TO = 6       -- fewer tracked items than this and the tape is topped up with market movers
 
 ---------------------------------------------------------------------------------------------------
 -- Pure part
@@ -183,13 +185,21 @@ function Ticker:Refresh()
     if not (Stockist.store and Stockist.tracked) then return end
     local now = Stockist.Clock.now()
     local ids = Stockist.tracked:List()
-    if #ids > 0 then
-        self.items = Ticker.Segments(Stockist.Watchlist.Rows(Stockist.store, ids, now, sortName, true))
-    else
-        -- Nothing tracked: show what is moving most across the market, under a heading saying so.
-        local rows = Stockist.Watchlist.Rows(Stockist.store, Stockist.store:Items(), now, sortName, true)
-        self.items = Ticker.MoverSegments(rows, MOVERS)
-        if #self.items > 0 then table.insert(self.items, 1, { heading = "Biggest movers" }) end
+    self.items = Ticker.Segments(Stockist.Watchlist.Rows(Stockist.store, ids, now, sortName, true))
+    if #self.items < FILL_TO then
+        -- Too few of your own to fill the strip: follow them with what is moving most across the market,
+        -- under a heading saying so (items you already track are not repeated).
+        local mine = {}
+        for _, id in ipairs(ids) do mine[id] = true end
+        local others = {}
+        for _, id in ipairs(Stockist.store:Items()) do
+            if not mine[id] then others[#others + 1] = id end
+        end
+        local movers = Ticker.MoverSegments(Stockist.Watchlist.Rows(Stockist.store, others, now, sortName, true), MOVERS)
+        if #movers > 0 then
+            self.items[#self.items + 1] = { heading = "Market movers" }
+            for _, seg in ipairs(movers) do self.items[#self.items + 1] = seg end
+        end
     end
     for _, seg in ipairs(self.items) do
         if seg.id then seg.move, seg.moveLabel = Ticker.Move(Stockist.store, seg.id, now) end

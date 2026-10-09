@@ -416,7 +416,7 @@ test("the scope's move sits right beside the price, with the smaller recent move
     for h = 47, 0, -1 do S.store:Add({ item = 11, ts = NOON - h * HOUR, price = 1000 + (47 - h) * 10, qty = 5 }) end
     panel:SetItem(11)
     eq(panel.changeText.text:find("24h", 1, true) ~= nil, true, "1D scope: the 24h move " .. panel.changeText.text)
-    eq(panel.changeText.text:find("+", 1, true) ~= nil, true, "it rose")
+    eq(panel.changeText.text:find("\226\150\178", 1, true) ~= nil, true, "it rose: an up triangle")
     eq(panel.recentText.text:find("recent", 1, true) ~= nil, true, panel.recentText.text)
     eq(panel.recentText.points[#panel.recentText.points][2], panel.changeText, "the recent move follows the scope's move")
     eq(panel.metaText.text, "updated just now")
