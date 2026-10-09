@@ -84,17 +84,22 @@ test("cells are placed by fraction and kept apart by the gap", function()
     local S = setup()
     local layout = S.Workspace.LAYOUTS.trader
     local rects = S.Workspace.CellRects(layout, 1000, 600, 6)
-    eq(#rects, 3)
-    eq(rects[1].id, "ticker"); eq(rects[2].id, "watchlist"); eq(rects[3].id, "chart")
+    eq(#rects, 4)
+    local by = {}
+    for _, rect in ipairs(rects) do by[rect.id] = rect end
+    eq(by.ticker ~= nil and by.watchlist ~= nil and by.movers ~= nil and by.chart ~= nil, true)
     -- ticker: a thin strip across the top (6% of the height)
-    eq(rects[1].x, 3); eq(rects[1].y, 3); eq(rects[1].w, 994); eq(rects[1].h, 30)
-    -- watchlist: 27% wide from the left, below the strip; chart: the rest
-    eq(rects[2].x, 3); eq(rects[2].y, 39)
-    eq(rects[2].w, 264); eq(rects[2].h, 558)
-    eq(rects[3].x, 273)
-    eq(rects[3].x - (rects[2].x + rects[2].w), 6, "6px between the two cells")
-    eq(rects[3].x + rects[3].w, 997, "3px from the right edge")
-    eq(rects[2].y - (rects[1].y + rects[1].h), 6, "6px below the strip")
+    eq(by.ticker.x, 3); eq(by.ticker.y, 3); eq(by.ticker.w, 994); eq(by.ticker.h, 30)
+    -- left column, 27% wide below the strip: the watchlist above the movers; chart: the rest
+    eq(by.watchlist.x, 3); eq(by.watchlist.y, 39)
+    eq(by.watchlist.w, 264); eq(by.watchlist.h, 294)
+    eq(by.movers.x, 3); eq(by.movers.w, 264)
+    eq(by.movers.y - (by.watchlist.y + by.watchlist.h), 6, "6px between the watchlist and the movers")
+    eq(by.chart.x, 273)
+    eq(by.chart.x - (by.watchlist.x + by.watchlist.w), 6, "6px between the column and the chart")
+    eq(by.chart.x + by.chart.w, 997, "3px from the right edge")
+    eq(by.watchlist.y - (by.ticker.y + by.ticker.h), 6, "6px below the strip")
+    eq(by.movers.y + by.movers.h, 597, "the column reaches the bottom")
     Fake.uninstall()
 end)
 
@@ -133,12 +138,13 @@ test("the selected item goes to the link group, and an unbuilt panel type gets a
     eq(S.Panels:Get("watchlist"), nil, "the watchlist panel is not built yet")
     S.Workspace.Show(7)
     eq(S.Link.Get("A"), 7)
-    local placeholder
+    local named
     for _, o in ipairs(Fake.objects) do
-        if o.kind == "FontString" and o.text and o.text:find("Coming soon", 1, true) then placeholder = o end
+        if o.kind == "FontString" and o.text and o.text:find("Coming soon", 1, true) and o.text:find("Watchlist", 1, true) then
+            named = o
+        end
     end
-    eq(placeholder ~= nil, true, "a placeholder label was created")
-    eq(placeholder.text:find("Watchlist", 1, true) ~= nil, true, "named after the missing panel")
+    eq(named ~= nil, true, "a placeholder label named after the missing panel was created")
     Fake.uninstall()
 end)
 
@@ -218,11 +224,11 @@ test("cells are laid out when the window opens, and again on the next frame and 
     for _, f in ipairs(Fake.frames) do
         if f.parent == content and f.size then sized[#sized + 1] = f end
     end
-    eq(#sized, 3)
-    local before = sized[3].size[1]
+    eq(#sized, 4)
+    local before = sized[4].size[1]
     content.size = { 2000, 800 }
     Fake.fire(content, "OnSizeChanged")
-    eq(sized[3].size[1] > before, true, "the chart cell grew with the window")
+    eq(sized[4].size[1] > before, true, "the chart cell grew with the window")
     Fake.uninstall()
 end)
 

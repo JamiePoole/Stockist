@@ -49,6 +49,14 @@ R("ticker-item", "Tracked item", "Click to show this item in the chart. Hover th
     "The strip scrolls through the items you track, each with its price and how far it moved in the last 24 hours "
     .. "(green is up, red is down). Drop an item on it to start tracking it.")
 
+R("movers-row", "Mover", "Click to show this item in the chart.",
+    "The biggest risers and fallers across every item we hold prices for, by how far the price moved over "
+    .. "the last 24 hours (or as far back as we have, when that is less; the grey label says how far).")
+
+R("movers-tracked", "Watchlist only", "Narrows the lists to the items on your watchlist.",
+    "Off, the lists cover the whole market, including items you have never looked at. On, they show "
+    .. "only how your own watchlist items are moving.")
+
 R("tutorial", "Tutorial tips", "Turns the longer explanations on or off.",
     "When on, buttons and the chart show plain-language descriptions of what each thing means. "
     .. "Turn it off once you know your way around.")
