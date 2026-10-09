@@ -24,6 +24,7 @@ Popping out is remembered for the session only: after a relog `/stockist` opens 
 |---|---|---|
 | Watchlist | tracked items: price, change, sparkline | v1. Uses `Data/Tracked.lua` |
 | Price chart | candles or line, indicators, supply | v1. Exists (`Features/PriceChart.lua`) |
+| Ticker | a thin strip scrolling the tracked items with price and 24h move | v1. Built (`Features/Ticker.lua`): hover pauses, click selects, drop tracks; stands still when everything fits |
 | Movers | biggest risers and fallers | v1. Command version exists |
 | Depth | units listed at each price | v1. Local scan only, never shared |
 | Status bar | data age, peers, next scan | v1 |

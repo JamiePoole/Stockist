@@ -48,6 +48,7 @@ Features\PriceChart.lua
 Features\ItemPicker.lua
 Features\ChartPanel.lua
 Features\Watchlist.lua
+Features\Ticker.lua
 Features\Workspace.lua
 Features\StatusCommands.lua
 Features\DataCleanup.lua

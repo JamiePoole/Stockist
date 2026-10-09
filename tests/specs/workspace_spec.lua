@@ -84,14 +84,17 @@ test("cells are placed by fraction and kept apart by the gap", function()
     local S = setup()
     local layout = S.Workspace.LAYOUTS.trader
     local rects = S.Workspace.CellRects(layout, 1000, 600, 6)
-    eq(#rects, 2)
-    eq(rects[1].id, "watchlist"); eq(rects[2].id, "chart")
-    -- watchlist: 27% wide from the left; chart: the rest
-    eq(rects[1].x, 3); eq(rects[1].y, 3)
-    eq(rects[1].w, 264); eq(rects[1].h, 594)
-    eq(rects[2].x, 273)
-    eq(rects[2].x - (rects[1].x + rects[1].w), 6, "6px between the two cells")
-    eq(rects[2].x + rects[2].w, 997, "3px from the right edge")
+    eq(#rects, 3)
+    eq(rects[1].id, "ticker"); eq(rects[2].id, "watchlist"); eq(rects[3].id, "chart")
+    -- ticker: a thin strip across the top (6% of the height)
+    eq(rects[1].x, 3); eq(rects[1].y, 3); eq(rects[1].w, 994); eq(rects[1].h, 30)
+    -- watchlist: 27% wide from the left, below the strip; chart: the rest
+    eq(rects[2].x, 3); eq(rects[2].y, 39)
+    eq(rects[2].w, 264); eq(rects[2].h, 558)
+    eq(rects[3].x, 273)
+    eq(rects[3].x - (rects[2].x + rects[2].w), 6, "6px between the two cells")
+    eq(rects[3].x + rects[3].w, 997, "3px from the right edge")
+    eq(rects[2].y - (rects[1].y + rects[1].h), 6, "6px below the strip")
     Fake.uninstall()
 end)
 
@@ -215,11 +218,11 @@ test("cells are laid out when the window opens, and again on the next frame and 
     for _, f in ipairs(Fake.frames) do
         if f.parent == content and f.size then sized[#sized + 1] = f end
     end
-    eq(#sized, 2)
-    local before = sized[2].size[1]
+    eq(#sized, 3)
+    local before = sized[3].size[1]
     content.size = { 2000, 800 }
     Fake.fire(content, "OnSizeChanged")
-    eq(sized[2].size[1] > before, true, "the chart cell grew with the window")
+    eq(sized[3].size[1] > before, true, "the chart cell grew with the window")
     Fake.uninstall()
 end)
 
