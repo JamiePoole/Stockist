@@ -46,14 +46,18 @@ end)
 
 -- The banner ----------------------------------------------------------------------------------------
 
-test("opening the Auction House builds a banner under its window, hidden until a scan starts", function()
+test("opening the Auction House builds a banner along the top of its window, hidden until a scan starts", function()
     local S, state = setup()
     S.Events:Fire("AH_OPENED")
     local banner = S.AuctionHouseGuard.banner
     eq(banner ~= nil, true)
     eq(banner.frame.shown, false, "hidden at first")
-    local pt = banner.frame.points[1]
-    eq(pt[1], "TOP"); eq(pt[2], state.ah); eq(pt[3], "BOTTOM", "hangs under the window, covering nothing of it")
+    local left, right
+    for _, pt in ipairs(banner.frame.points) do
+        if pt[1] == "BOTTOMLEFT" then left = pt elseif pt[1] == "BOTTOMRIGHT" then right = pt end
+    end
+    eq(left[2], state.ah); eq(left[3], "TOPLEFT", "sits on the window's top edge, left corner")
+    eq(right[2], state.ah); eq(right[3], "TOPRIGHT", "as wide as the window, where it cannot be missed")
     cleanup()
 end)
 
@@ -184,5 +188,109 @@ test("pressing the original keys of a scan-less window never raises the question
     S.Scanner = nil -- no scanner at all (nothing to protect)
     Fake.fire(state.ah.CloseButton, "OnClick")
     eq(state.closed, 1); eq(#state.popups, 0)
+    cleanup()
+end)
+
+-- Esc ------------------------------------------------------------------------------------------------
+
+--- Set up the guard and capture what it does to the keyboard.
+local function withKeys()
+    local S, state = setup()
+    S.Events:Fire("AH_OPENED")
+    state.keys = S.AuctionHouseGuard.keys
+    state.propagate, state.listening = nil, nil
+    state.keys.SetPropagateKeyboardInput = function(_, v) state.propagate = v end
+    state.keys.EnableKeyboard = function(_, on) state.listening = on end
+    state.ah.shown = true
+    return S, state
+end
+
+test("the keyboard guard listens only while a scan runs", function()
+    local S, state = withKeys()
+    S.Scanner.inProgress = true
+    S.Events:Fire("SCAN_STARTED")
+    eq(state.listening, true, "listening during a scan")
+    S.Scanner.inProgress = false
+    S.Events:Fire("SCAN_COMPLETE", 1, 0)
+    eq(state.listening, false, "and not after")
+    S.Events:Fire("SCAN_STARTED")
+    S.Events:Fire("SCAN_FAILED", "x")
+    eq(state.listening, false)
+    S.Events:Fire("SCAN_STARTED")
+    S.Events:Fire("AH_CLOSED")
+    eq(state.listening, false, "and not once the window is gone")
+    cleanup()
+end)
+
+test("Esc during a scan is taken and asks first; closing happens only if the player agrees", function()
+    local S, state = withKeys()
+    S.Scanner.inProgress = true
+    Fake.fire(state.keys, "OnKeyDown", "ESCAPE")
+    eq(state.propagate, false, "the game does not get this Esc")
+    eq(state.popups[1], "STOCKIST_CLOSE_AUCTION_HOUSE", "the question was put")
+    local hid = 0
+    HideUIPanel = function() hid = hid + 1 end
+    StaticPopupDialogs["STOCKIST_CLOSE_AUCTION_HOUSE"].OnAccept()
+    eq(hid, 1, "'Close anyway' closes the window")
+    HideUIPanel = nil
+    cleanup()
+end)
+
+test("Esc answered with 'Keep open' leaves the window alone", function()
+    local S, state = withKeys()
+    S.Scanner.inProgress = true
+    Fake.fire(state.keys, "OnKeyDown", "ESCAPE")
+    local hid = 0
+    HideUIPanel = function() hid = hid + 1 end
+    StaticPopupDialogs["STOCKIST_CLOSE_AUCTION_HOUSE"].OnCancel()
+    eq(hid, 0); eq(S.AuctionHouseGuard.pending, nil)
+    HideUIPanel = nil
+    cleanup()
+end)
+
+test("every other key, and Esc with no scan, go on to the game untouched", function()
+    local S, state = withKeys()
+    S.Scanner.inProgress = true
+    for _, key in ipairs({ "A", "ENTER", "SPACE", "F1", "TAB" }) do
+        state.propagate = nil
+        Fake.fire(state.keys, "OnKeyDown", key)
+        eq(state.propagate, true, key .. " passes through")
+    end
+    eq(#state.popups, 0, "none of them asked anything")
+    S.Scanner.inProgress = false
+    Fake.fire(state.keys, "OnKeyDown", "ESCAPE")
+    eq(state.propagate, true, "Esc with nothing to protect closes as usual")
+    eq(#state.popups, 0)
+    cleanup()
+end)
+
+test("when our question is already showing, Esc goes to it (to dismiss it) and does not ask again", function()
+    local S, state = withKeys()
+    S.Scanner.inProgress = true
+    StaticPopup_Visible = function(name) return name == "STOCKIST_CLOSE_AUCTION_HOUSE" end
+    Fake.fire(state.keys, "OnKeyDown", "ESCAPE")
+    eq(state.propagate, true)
+    eq(#state.popups, 0)
+    StaticPopup_Visible = nil
+    cleanup()
+end)
+
+test("Esc is only taken while the Auction House window is actually open", function()
+    local S, state = withKeys()
+    S.Scanner.inProgress = true
+    state.ah.shown = false
+    Fake.fire(state.keys, "OnKeyDown", "ESCAPE")
+    eq(state.propagate, true)
+    eq(#state.popups, 0)
+    cleanup()
+end)
+
+test("opening the Auction House mid-scan starts the keyboard guard straight away", function()
+    local S, state = setup()
+    S.Scanner.inProgress = true
+    local listening
+    S.Events:Fire("AH_OPENED")
+    local keys = S.AuctionHouseGuard.keys
+    eq(keys ~= nil, true)
     cleanup()
 end)
