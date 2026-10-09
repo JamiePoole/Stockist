@@ -12,6 +12,10 @@ Stockist.ChartPanel = ChartPanel
 
 local LEGEND_GAP = 12 -- empty space between the chart and the legend below it
 local HEADER_MARGIN = 10 -- clear space kept between the header text and the buttons
+-- The header sits inside the same padding as the watchlist's title and pop-out button, so a chart beside or
+-- below another panel lines up with it. The chart itself still fills the whole panel.
+local HEADER_LEFT, HEADER_RIGHT, HEADER_TOP = 8, 4, 2
+ChartPanel.HEADER_LEFT, ChartPanel.HEADER_RIGHT, ChartPanel.HEADER_TOP = HEADER_LEFT, HEADER_RIGHT, HEADER_TOP
 local DOT_STEP = 4                    -- the dotted underline that marks the item name as clickable
 local DOT_REST, DOT_HOVER = 0.5, 1
 
@@ -64,7 +68,7 @@ function ChartPanel.Create(parent, opts)
 
     -- Header, left to right: item name (hover for its tooltip), price, 24h change and age.
     self.nameText = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    self.nameText:SetPoint("TOPLEFT", 2, -4)
+    self.nameText:SetPoint("TOPLEFT", HEADER_LEFT, -(HEADER_TOP + 3))
     self.nameText:SetJustifyH("LEFT")
     self.nameText:SetWordWrap(false) -- too long for the room: cut off with "..." (LayoutHeader sets the width)
     self.nameHit = CreateFrame("Frame", nil, frame)
@@ -111,19 +115,19 @@ function ChartPanel.Create(parent, opts)
     -- Controls, right to left: pop out | time scope buttons | divider | chart overlays.
     local prev
     local gap = -2
-    local used = 0 -- width taken by the buttons, from the right edge: the header text must stay clear of it
+    local used = HEADER_RIGHT -- width taken by the buttons, from the right edge: the header text must stay clear of it
     if opts.popOut then
         local pop = Stockist.UI.IconButton.Create(frame, { icon = "popout", width = 24, height = 20 })
-        pop:SetPoint("TOPRIGHT", 0, 0)
+        pop:SetPoint("TOPRIGHT", -HEADER_RIGHT, -HEADER_TOP)
         pop:SetScript("OnClick", function() self:PopOut() end)
         Stockist.UI.Tooltip.Attach(pop, "popout")
         self.popOutButton = pop
-        prev, gap, used = pop, -8, 24
+        prev, gap, used = pop, -8, HEADER_RIGHT + 24
     end
     for i = #PriceChart.TIMEFRAMES, 1, -1 do
         local tf = PriceChart.TIMEFRAMES[i]
         local b = button(frame, tf.key, 40, "timeframe-" .. tf.key)
-        if prev then b:SetPoint("RIGHT", prev, "LEFT", gap, 0) else b:SetPoint("TOPRIGHT", 0, 0) end
+        if prev then b:SetPoint("RIGHT", prev, "LEFT", gap, 0) else b:SetPoint("TOPRIGHT", -HEADER_RIGHT, -HEADER_TOP) end
         used = used + (prev and -gap or 0) + 40
         gap = -2
         b:SetScript("OnClick", function()
@@ -341,7 +345,7 @@ end
 function ChartPanel:LayoutHeader()
     local width = self.frame:GetWidth()
     local natural = self.nameText:GetStringWidth()
-    local room = width - self.controlsWidth - HEADER_MARGIN
+    local room = width - HEADER_LEFT - self.controlsWidth - HEADER_MARGIN
 
     -- Empty pieces take no room: each piece hangs from the last one that has text, so the gaps between the
     -- pieces that are shown are exactly the ones counted.
