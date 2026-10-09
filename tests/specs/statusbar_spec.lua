@@ -89,6 +89,10 @@ test("the second piece says what the scanner is doing and when it can next", fun
     eq(second({ wait = 0, ahOpen = true }), "ready to scan")
     eq(second({ wait = 0, ahOpen = false }), "scans when you open the Auction House")
     eq(second({ scanning = true, wait = 300 }), "scanning...", "a running scan outranks the countdown")
+    local scanning = S.StatusBar.Parts(info({ scanning = true }))[2][2]
+    eq(scanning[3] > scanning[2] and scanning[3] > scanning[1], true, "in progress is blue, not green: it may still fail")
+    local ready = S.StatusBar.Parts(info({ ahOpen = true }))[2][2]
+    eq(ready[2] > ready[1] and ready[2] > ready[3], true, "ready to scan stays green")
     Fake.uninstall()
 end)
 

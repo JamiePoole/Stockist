@@ -19,6 +19,7 @@ StatusBar.FRESH_SEC = 30 * 60
 StatusBar.STALE_SEC = 3 * 3600
 
 local GREEN, AMBER, RED, GREY = { 0.2, 0.78, 0.45 }, { 1, 0.75, 0.25 }, { 0.92, 0.3, 0.3 }, { 0.6, 0.63, 0.68 }
+local BLUE = { 0.35, 0.65, 1 } -- "in progress": not green, which would suggest it has succeeded
 local SEPARATOR = Format.Colored("  " .. "-" .. "  ", 0.4, 0.43, 0.48)
 local TICK = 1 -- seconds between redraws while visible
 
@@ -54,7 +55,7 @@ function StatusBar.Parts(info)
     end
 
     if info.scanning then
-        parts[#parts + 1] = { "scanning...", GREEN }
+        parts[#parts + 1] = { "scanning...", BLUE }
     elseif info.wait and info.wait > 0 then
         parts[#parts + 1] = { "next scan in " .. countdown(info.wait), GREY }
     elseif info.ahOpen then
