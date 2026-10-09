@@ -108,10 +108,20 @@ function Format.Percent(p)
     return ("%+.2f%%"):format(p)
 end
 
---- The same, coloured: green above zero, red below, grey for none. Nil gives "".
+-- Up and down triangles. They are small textures shipped with the addon (Textures/ArrowUp.tga, ArrowDown.tga),
+-- drawn inline in the text, because the glyphs are missing from some of the fonts the panels use.
+local ARROW_SIZE = 10
+local UP = "|TInterface\\AddOns\\Stockist\\Textures\\ArrowUp:" .. ARROW_SIZE .. ":" .. ARROW_SIZE .. "|t"
+local DOWN = "|TInterface\\AddOns\\Stockist\\Textures\\ArrowDown:" .. ARROW_SIZE .. ":" .. ARROW_SIZE .. "|t"
+Format.ARROW_UP, Format.ARROW_DOWN = UP, DOWN
+
+--- A move as the markets show it: a green up triangle or a red down triangle, then the size (green or red
+--- too), up-triangle 3.10% or down-triangle 0.42%. A move that rounds to nothing is a plain grey "0.00%". Nil gives "".
 function Format.Change(p)
     if p == nil then return "" end
-    local r, g, b = 0.6, 0.6, 0.6
-    if p > 0 then r, g, b = 0.2, 0.78, 0.45 elseif p < 0 then r, g, b = 0.92, 0.3, 0.3 end
-    return Format.Colored(Format.Percent(p), r, g, b)
+    local text = ("%.2f%%"):format(math.abs(p))
+    local rounded = tonumber(("%.2f"):format(p))
+    if rounded > 0 then return UP .. Format.Colored(text, 0.2, 0.78, 0.45) end
+    if rounded < 0 then return DOWN .. Format.Colored(text, 0.92, 0.3, 0.3) end
+    return Format.Colored(text, 0.6, 0.6, 0.6)
 end

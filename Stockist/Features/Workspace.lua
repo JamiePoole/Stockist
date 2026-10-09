@@ -14,8 +14,9 @@ Workspace.LAYOUTS = {
     trader = {
         name = "Trader",
         cells = {
-            { id = "watchlist", panel = "watchlist", title = "Watchlist", x = 0, y = 0, w = 0.27, h = 1, link = "A" },
-            { id = "chart", panel = "chart", title = "Price chart", x = 0.27, y = 0, w = 0.73, h = 1, link = "A" },
+            { id = "ticker", panel = "ticker", title = "Ticker", x = 0, y = 0, w = 1, h = 0.06, link = "A" },
+            { id = "watchlist", panel = "watchlist", title = "Watchlist", x = 0, y = 0.06, w = 0.27, h = 0.94, link = "A" },
+            { id = "chart", panel = "chart", title = "Price chart", x = 0.27, y = 0.06, w = 0.73, h = 0.94, link = "A" },
         },
     },
 }
@@ -112,6 +113,12 @@ end
 
 function Workspace.IsShown()
     return win ~= nil and win.frame:IsShown()
+end
+
+--- Make sure the workspace is open, for something chosen in a panel that lives outside it (a popped-out
+--- ticker, say): the chart that shows the choice is in the workspace. Does nothing if it is already open.
+function Workspace.Reveal()
+    if not Workspace.IsShown() then Workspace.Show() end
 end
 
 local function open(arg)

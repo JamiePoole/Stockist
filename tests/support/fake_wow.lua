@@ -67,6 +67,7 @@ local function trackedMethods()
             local text = (self.text or ""):gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")
             local icons
             text, icons = text:gsub("|T.-|t", "")
+            text = text:gsub("[\128-\191]", "") -- one character per UTF-8 sequence, not per byte
             return 6 * #text + 14 * icons
         end,
         GetStringHeight = function(self)

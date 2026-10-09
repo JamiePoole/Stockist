@@ -463,6 +463,9 @@ function ChartPanel:Refresh()
     self.available = config.indicators
 
     self.nameText:SetText(Stockist.ItemInfo.ColoredName(state.itemID))
+    Stockist.ItemInfo.RetryUntilNamed(self, { state.itemID }, function()
+        if self.frame:IsVisible() then self:Refresh() end
+    end)
     local parts = PriceChart.HeaderParts(Stockist.store, state.itemID, now, state.timeframe)
     self.priceText:SetText(parts and Format.MoneyDisplay(parts.price) or "")
     self.headerParts = parts

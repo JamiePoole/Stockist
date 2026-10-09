@@ -45,6 +45,10 @@ R("change-recent", "Recent change", "How far the latest price is from its averag
     .. "listing from making the number jump around. It appears once there are a few scans to average. "
     .. "Handy for an item you are not watching: it shows whether it is moving right now.")
 
+R("ticker-item", "Tracked item", "Click to show this item in the chart. Hover the strip to pause it.",
+    "The strip scrolls through the items you track, each with its price and how far it moved in the last 24 hours "
+    .. "(green is up, red is down). Drop an item on it to start tracking it.")
+
 R("tutorial", "Tutorial tips", "Turns the longer explanations on or off.",
     "When on, buttons and the chart show plain-language descriptions of what each thing means. "
     .. "Turn it off once you know your way around.")
