@@ -2,7 +2,7 @@ local ADDON_NAME, Stockist = ...
 
 -- Candles: one OHLC bucket of readings for one item.
 --   t  bucket start (unix seconds)    o/h/l/c  open, high, low, close price (copper)
---   q  quantity listed at the close   n        number of readings merged in
+--   q  average quantity listed        n        number of readings merged in
 --   ot/ct  timestamps of the open and close readings (needed to merge buckets in any order)
 local Rollup = { HOUR = 3600, DAY = 86400 }
 Stockist.Rollup = Rollup
@@ -11,8 +11,10 @@ function Rollup.BucketStart(ts, size)
     return ts - (ts % size)
 end
 
-function Rollup.NewCandle(t, price, qty, ts)
-    return { t = t, o = price, h = price, l = price, c = price, q = qty, n = 1, ot = ts, ct = ts }
+--- `price` is the value the candle follows (the median of the cheapest units); `low` (optional) is the cheapest
+--- unit price seen, which sets the candle's low so it shows the lowest price, not just the lowest median.
+function Rollup.NewCandle(t, price, qty, ts, low)
+    return { t = t, o = price, h = price, l = math.min(low or price, price), c = price, q = qty, n = 1, ot = ts, ct = ts }
 end
 
 local FIELDS = { "t", "o", "h", "l", "c", "q", "n", "ot", "ct" }
@@ -38,7 +40,7 @@ function Rollup.Merge(a, b)
         c = last.c, ct = last.ct,
         h = math.max(a.h, b.h),
         l = math.min(a.l, b.l),
-        q = last.q, -- the supply shown is the latest reading's, like the closing price: it matches the listing count
+        q = (a.q * a.n + b.q * b.n) / n,
         n = n,
     }
 end

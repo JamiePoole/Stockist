@@ -33,7 +33,7 @@ function Movers.Compute(store, ids, now, nameOf, limit)
         if last then
             local move, label = Stockist.Ticker.Move(store, id, now)
             if move and math.abs(move) >= MIN_MOVE then
-                local row = { id = id, name = nameOf(id), price = last.price, move = move, label = label }
+                local row = { id = id, name = nameOf(id), price = Stockist.ReadingStore.Headline(last), move = move, label = label }
                 if move > 0 then up[#up + 1] = row else down[#down + 1] = row end
             end
         end

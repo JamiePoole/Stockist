@@ -59,7 +59,7 @@ function Watchlist.Rows(store, ids, now, nameOf, lite)
         rows[#rows + 1] = {
             id = id,
             name = nameOf(id),
-            price = last and last.price or nil,
+            price = last and Stockist.ReadingStore.Headline(last) or nil,
             recent = last and (store:SmoothedChange(id, Stockist.PriceChart.RECENT_WINDOW)) or nil,
             change = last and store:Change(id, 86400, now) or nil,
             age = last and (now - last.ts) or nil,

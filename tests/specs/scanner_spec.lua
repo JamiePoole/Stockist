@@ -79,8 +79,8 @@ test("scan records one reading per trade-goods item, skipping other classes", fu
 
     local ten = S.store:Latest(10)
     eq(ten.min, 100); eq(ten.qty, 10)
-    eq(ten.price, 100, "the headline price is the lowest listed, as the Auction House shows it")
-    near(ten.med, 150, 1e-9) -- the median of the cheapest units is kept alongside
+    near(ten.price, 150, 1e-9, "charts follow the median of the cheapest units")
+    eq(S.ReadingStore.Headline(ten), 100, "the price shown is the cheapest listing, as the Auction House shows it")
     eq(S.store:Latest(20).price, 777)
     is_nil(S.store:Latest(99))
     eq(S.store:GetMeta(10).class, 7)
@@ -449,10 +449,10 @@ test("rows with no item are only a sign the list is gone while the window is clo
     eq(events[#events][1], "SCAN_COMPLETE", "the scan went on past the odd row")
 end)
 
-test("the price a scan records is the cheapest listing, even when most units are dearer", function()
+test("a scan records both the cheapest price and the median the charts follow, and the candle's low is the cheapest", function()
     -- Pristine Leather as the player saw it: a few cheap units at the bottom, 229 units in all, most dearer
     local auctions = {
-        { item = 10, count = 4, buyout = 4 * 146 },   -- 4 units at 1g46s-ish
+        { item = 10, count = 4, buyout = 4 * 146 },
         { item = 10, count = 20, buyout = 20 * 150 },
         { item = 10, count = 205, buyout = 205 * 179 }, -- most of the supply sits higher
     }
@@ -461,21 +461,27 @@ test("the price a scan records is the cheapest listing, even when most units are
     fire(frame, "REPLICATE_ITEM_LIST_UPDATE")
     flush()
     local last = S.store:Latest(10)
-    eq(last.price, 146, "the headline is the lowest price")
-    eq(last.min, 146)
-    eq(last.med > 146, true, "the median of the cheapest units is higher, and kept separately")
-    eq(last.qty, 229, "and the listed quantity is the full count")
+    eq(last.price, 179, "the median of the cheapest 200 units: what the chart follows")
+    eq(last.min, 146, "the cheapest unit")
+    eq(S.ReadingStore.Headline(last), 146, "and that is the price shown")
+    eq(last.qty, 229)
+    local candle = S.store:GetCandles(10, "hourly")[1]
+    eq(candle.o, 179); eq(candle.c, 179, "open and close follow the median")
+    eq(candle.l, 146, "the low is the lowest price seen")
+    eq(candle.h, 179)
 end)
 
-test("the supply on the newest candle matches the latest scan's listing count, not an average of the hour", function()
+test("the supply on a candle is the average over its readings, as an indication for the period", function()
     local auctions = { { item = 10, count = 133, buyout = 133 * 150 } }
     local S, frame, events, flush = setup(auctions, { now = 100000 })
     fire(frame, "AUCTION_HOUSE_SHOW")
     fire(frame, "REPLICATE_ITEM_LIST_UPDATE")
     flush()
-    S.store:Add({ item = 10, ts = 100000 + 600, price = 140, qty = 229 }) -- a second scan in the same hour
+    S.store:Add({ item = 10, ts = 100000 + 600, price = 140, min = 130, qty = 229 }) -- a second scan in the same hour
     local candles = S.store:GetCandles(10, "hourly")
     eq(#candles, 1)
-    eq(candles[1].q, 229, "the bar reads what the latest scan found")
-    eq(S.store:Latest(10).qty, 229)
+    eq(candles[1].q, 181, "the average of 133 and 229")
+    eq(S.store:Latest(10).qty, 229, "while the latest reading still says 229")
+    eq(candles[1].l, 130, "and the low is the lowest price seen across both scans")
+    eq(candles[1].h, 150, "the high the highest median")
 end)

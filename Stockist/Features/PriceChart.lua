@@ -196,7 +196,7 @@ function PriceChart.HeaderParts(store, itemID, now, key)
     local label = tf.label
     if change and covered < tf.span * 0.9 then label = Format.Span(covered) end
     return {
-        price = last.price, min = last.min, age = now - last.ts,
+        price = Stockist.ReadingStore.Headline(last), min = last.min, age = now - last.ts,
         recent = (store:SmoothedChange(itemID, RECENT_WINDOW)),
         change = change, changeLabel = label,
         -- for the hint shown when there is no move yet: how much history the scope needs, and how much exists

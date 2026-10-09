@@ -20,7 +20,7 @@ test("Rollup.Merge takes open from earliest and close from latest, regardless of
     for _, m in ipairs({ S.Rollup.Merge(early, late), S.Rollup.Merge(late, early) }) do
         eq(m.o, 100); eq(m.c, 140); eq(m.h, 140); eq(m.l, 100)
         eq(m.ot, 5); eq(m.ct, 50); eq(m.n, 2)
-        eq(m.q, 30, "the supply shown is the latest reading's, whichever order they merge in")
+        near(m.q, 20)
     end
 end)
 
@@ -218,4 +218,21 @@ test("Store keeps meta", function()
     store:SetMeta(5, 7, 9)
     eq(store:GetMeta(5).sub, 9)
     is_nil(store:GetMeta(6))
+end)
+
+test("a candle's low is the cheapest price seen and its high the highest value followed; open and close follow the value", function()
+    local S = ns()
+    local c = S.Rollup.NewCandle(0, 179, 229, 5, 146)
+    eq(c.o, 179); eq(c.c, 179); eq(c.h, 179); eq(c.l, 146, "the cheapest listing sets the low")
+    eq(S.Rollup.NewCandle(0, 100, 1, 5, 150).l, 100, "a 'low' above the value cannot raise the low")
+    eq(S.Rollup.NewCandle(0, 100, 1, 5).l, 100, "and with no low given it is the value")
+    local m = S.Rollup.Merge(S.Rollup.NewCandle(0, 179, 229, 5, 146), S.Rollup.NewCandle(0, 190, 200, 50, 160))
+    eq(m.l, 146, "the lowest low of the two"); eq(m.h, 190, "the highest high")
+    eq(m.o, 179); eq(m.c, 190)
+end)
+
+test("the price shown for a reading is the cheapest unit, falling back to the value when no cheapest is known", function()
+    local S = ns()
+    eq(S.ReadingStore.Headline({ price = 179, min = 146 }), 146)
+    eq(S.ReadingStore.Headline({ price = 179 }), 179)
 end)
