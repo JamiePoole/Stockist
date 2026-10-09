@@ -10,7 +10,7 @@ local FILES = {
     "UI/Charts/Scale.lua", "UI/Charts/Formatters.lua", "UI/Charts/Theme.lua", "UI/Charts/Series/Line.lua",
     "UI/Charts/Series/Candle.lua", "UI/Charts/Series/Bar.lua", "UI/Charts/Overlays/Overlays.lua",
     "UI/Charts/Core.lua", "UI/Charts/FrameCanvas.lua", "UI/Charts/ChartFrame.lua", "UI/Kit/Tooltip.lua",
-    "UI/Kit/Button.lua", "UI/Kit/IconButton.lua", "UI/Kit/Window.lua", "Features/PopOut.lua", "Features/PriceChart.lua", "Features/ItemPicker.lua", "Features/ChartPanel.lua",
+    "UI/Kit/Button.lua", "UI/Kit/IconButton.lua", "UI/Kit/Window.lua", "Features/PopOut.lua", "Features/PriceChart.lua", "Features/ItemPicker.lua", "Features/ChartPanel.lua", "Features/Watchlist.lua",
 }
 
 --- A fresh addon with the fake client installed. Item 7 has two days of hourly history, item 8 only
@@ -413,6 +413,7 @@ end)
 test("the scope's move sits right beside the price, with the smaller recent move after it", function()
     local S = setup()
     local panel = S.ChartPanel.Create(UIParent)
+    panel.frame:SetWidth(900)
     for h = 47, 0, -1 do S.store:Add({ item = 11, ts = NOON - h * HOUR, price = 1000 + (47 - h) * 10, qty = 5 }) end
     panel:SetItem(11)
     eq(panel.changeText.text:find("24h", 1, true) ~= nil, true, "1D scope: the 24h move " .. panel.changeText.text)
@@ -438,6 +439,8 @@ end)
 
 -- The header when the panel is too narrow for everything ----------------------------------------------
 
+local S_HEADER_LEFT = 8 -- ChartPanel.HEADER_LEFT: the header starts this far in from the panel's left edge
+
 --- An item with two days of scans every hour, so every part of the header has something to show.
 local function longNamePanel(S)
     for h = 47, 0, -1 do S.store:Add({ item = 12, ts = NOON - h * HOUR, price = 1000 + (47 - h) * 10, qty = 5 }) end
@@ -459,7 +462,7 @@ local function measure(panel)
     return m
 end
 
-local function widthFor(panel, m, name, rest) return panel.controlsWidth + 10 + name + rest end
+local function widthFor(panel, m, name, rest) return panel.controlsWidth + S_HEADER_LEFT + 10 + name + rest end
 
 test("a wide panel shows the whole header", function()
     local S = setup()
@@ -511,7 +514,7 @@ test("the text never reaches the buttons, however narrow the panel gets", functi
         local used = panel.nameText.size[1] + m.base
         if panel.recentText.text ~= "" then used = used + 8 + panel.recentText:GetStringWidth() end
         if panel.metaText.text ~= "" then used = used + 12 + panel.metaText:GetStringWidth() end
-        local limit = w - panel.controlsWidth - 10
+        local limit = w - S_HEADER_LEFT - panel.controlsWidth - 10
         if limit >= 1 + m.base then eq(used <= limit, true, "width " .. w) end
     end
     panel.frame:SetWidth(100) -- absurdly narrow: the name has no room left, but nothing breaks
@@ -525,7 +528,7 @@ test("'no data yet' outranks the item name", function()
     S.ItemInfo.ColoredName = function() return "Craftsman's Writ: Shadow Goggles" end
     local panel = S.ChartPanel.Create(UIParent)
     panel:SetItem(9)
-    panel.frame:SetWidth(panel.controlsWidth + 10 + 150)
+    panel.frame:SetWidth(panel.controlsWidth + S_HEADER_LEFT + 10 + 150)
     panel:LayoutHeader()
     eq(panel.metaText.text, "no data yet", "the reason for the empty chart stays")
     local m = panel.metaText:GetStringWidth()
@@ -572,5 +575,35 @@ test("the moving average and the Bollinger bands are drawn in different colours,
     local only
     for _, e in ipairs(model.panes[1].entries) do if e.spec.label == "upper band" then only = e.color end end
     eq(only[3], upper[3])
+    Fake.uninstall()
+end)
+
+test("the chart header has the same padding as the watchlist's, while the chart fills the panel", function()
+    local S = setup()
+    local chart = S.ChartPanel.Create(UIParent, { popOut = true })
+    local list = S.Watchlist.Create(UIParent, { popOut = true })
+    local function pointOf(o, anchor)
+        for _, pt in ipairs(o.points or {}) do if pt[1] == anchor then return pt end end
+    end
+    -- the title: same left and top offsets as the watchlist's "Watchlist" title
+    local ct, lt = pointOf(chart.nameText, "TOPLEFT"), pointOf(list.title, "TOPLEFT")
+    eq(ct[2], lt[2], "same distance from the left"); eq(ct[3], lt[3], "and from the top")
+    -- the pop-out button: same corner offsets as the watchlist's
+    local cp, lp = pointOf(chart.popOutButton, "TOPRIGHT"), pointOf(list.popOutButton, "TOPRIGHT")
+    eq(cp[2], lp[2], "same distance from the right"); eq(cp[3], lp[3], "and from the top")
+    -- without a pop-out button, the first scope button takes that place
+    local bare = S.ChartPanel.Create(UIParent)
+    local first = pointOf(bare.tfButtons["1M"], "TOPRIGHT")
+    eq(first[2], cp[2]); eq(first[3], cp[3])
+    -- the chart itself is unchanged: flush left and right, below the header
+    chart:SetItem(7) -- lays the chart out
+    local pts = chart.chart.frame.points
+    local tl, br
+    for _, pt in ipairs(pts) do
+        if pt[1] == "TOPLEFT" then tl = pt elseif pt[1] == "BOTTOMRIGHT" then br = pt end
+    end
+    eq(tl[4], 0); eq(br[4], 0, "the chart still fills the panel's full width")
+    -- the text must keep clear of the padding too
+    eq(chart.controlsWidth >= S.ChartPanel.HEADER_RIGHT + 24, true)
     Fake.uninstall()
 end)
