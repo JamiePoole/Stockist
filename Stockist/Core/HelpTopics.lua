@@ -27,6 +27,10 @@ R("popout", "Pop out", "Opens this panel in its own window.",
     "The chart stays here too. A popped-out window is handy when you want to keep one item in view while "
     .. "you look at something else.")
 
+R("watchlist-line", "The small line", "The price over the last 7 days.",
+    "It is green if the price ended higher than it began, red if it ended lower, and grey if it did not change. "
+    .. "It is only a glance at the shape (steady, climbing, a sudden spike): click the row to open the full chart.")
+
 R("watchlist-row", "Tracked item", "Click to show this item in the chart. To stop tracking it, select it and use the button below the list.",
     "Each row shows the cheapest price now, how far it has moved in the last 24 hours (green is up, red is down) "
     .. "and a small line of the last 7 days. The line is green if the price ended higher than it started.")
@@ -60,6 +64,40 @@ R("movers-tracked", "Watchlist only", "Narrows the lists to the items on your wa
 R("tutorial", "Tutorial tips", "Turns the longer explanations on or off.",
     "When on, buttons and the chart show plain-language descriptions of what each thing means. "
     .. "Turn it off once you know your way around.")
+
+-- Guides: the longer written explanation a panel shows at its foot in tutorial mode (see Help.Guide). Plain
+-- words, general hints rather than instructions.
+Stockist.Help.guides.movers = {
+    title = "Reading the movers",
+    key = {
+        { "Mover", "an item whose price has changed a lot compared with the rest of the market" },
+        { "Time range", "the last 24 hours; with less history than that, the grey label says how far back it reaches" },
+        { "Green up arrow / red down arrow", "the price is higher / lower than it was, and the percentage is by how much" },
+    },
+    tipsTitle = "What it might mean",
+    tips = {
+        "Rising fast: often supply ran short or demand jumped. If you hold some, it may be a good moment to sell, or to wait if it keeps climbing. Buying after a big jump can mean paying a peak price.",
+        "Falling fast: often sellers are undercutting each other or a lot of stock arrived. If you need the item, a dip can be a good time to stock up cheaply, though it may keep falling.",
+        "Cheap items swing the most in percent: 2 copper to 3 copper is +50%. Look at the price as well as the arrow.",
+        "Open one in the chart to see whether it is a steady trend or a single spike. Hints, not advice.",
+    },
+}
+
+Stockist.Help.guides.watchlist = {
+    title = "Reading the watchlist",
+    key = {
+        { "Price", "the cheapest price right now" },
+        { "First arrow figure", "how far the price is from its average over the last couple of hours" },
+        { "Grey figure", "how far it has moved over the last 24 hours" },
+        { "Small line", "the price over the last 7 days: green if it ended higher than it began, red if lower" },
+    },
+    tipsTitle = "How to use it",
+    tips = {
+        "Track the items you buy or sell often, then glance here to see what has moved.",
+        "Click a row to open its chart. To stop tracking an item, select it and press the button below.",
+        "Several items falling at once can mean a patch or event is changing the market.",
+    },
+}
 
 -- The legend under the price chart (shown in tutorial mode): a key, and some general things to look
 -- for. The tips are hints about how to read a chart, not advice about what to buy or sell.

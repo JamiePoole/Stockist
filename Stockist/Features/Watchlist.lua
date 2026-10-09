@@ -10,7 +10,7 @@ local Watchlist = {}
 Watchlist.__index = Watchlist
 Stockist.Watchlist = Watchlist
 
-Watchlist.HELP_KEYS = { "watchlist-row", "watchlist-track" }
+Watchlist.HELP_KEYS = { "watchlist-row", "watchlist-line", "watchlist-track" }
 
 local ROW_HEIGHT = 36
 local SPARK_WIDTH, SPARK_HEIGHT = 64, 22
@@ -106,6 +106,15 @@ local function buildRow(self, parent)
     row.spark.frame:SetPoint("RIGHT", -6, 0)
     row.spark.frame:EnableMouse(false) -- clicks go to the row
 
+    -- Hovering the small line explains what it is. The area takes the mouse, so it hands clicks on to the row.
+    row.lineHit = CreateFrame("Frame", nil, row)
+    row.lineHit:SetAllPoints(row.spark.frame)
+    row.lineHit:EnableMouse(true)
+    Stockist.UI.Tooltip.Attach(row.lineHit, "watchlist-line")
+    row.lineHit:SetScript("OnMouseUp", function(hit, button)
+        if row.itemID and button == "LeftButton" then self:Select(row.itemID) end
+    end)
+
     row.name = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     row.name:SetPoint("TOPLEFT", 8, -5)
     row.name:SetPoint("TOPRIGHT", row.spark.frame, "TOPLEFT", -6, 0)
@@ -122,9 +131,10 @@ local function buildRow(self, parent)
         r.hoverBg:Show()
         if r.itemID then
             GameTooltip:SetOwner(r, "ANCHOR_RIGHT")
-            local _, short = Stockist.Help.Lines("watchlist-row")
+            local _, short, detail = Stockist.Help.Lines("watchlist-row")
             GameTooltip:AddLine(Stockist.ItemInfo.ColoredName(r.itemID), 1, 1, 1)
             if short then GameTooltip:AddLine(short, 0.8, 0.8, 0.8, true) end
+            if detail then GameTooltip:AddLine(detail, 0.55, 0.8, 1, true) end
             GameTooltip:Show()
         end
     end)
@@ -159,6 +169,8 @@ function Watchlist.Create(parent, opts)
         Stockist.UI.Tooltip.Attach(pop, "popout")
         self.popOutButton = pop
     end
+
+    self.guide = Stockist.UI.Guide.Create(frame, "watchlist", { bottom = FOOTER_HEIGHT })
 
     self.list = CreateFrame("Frame", nil, frame)
     self.list:SetPoint("TOPLEFT", 0, -HEADER_HEIGHT)
@@ -198,6 +210,7 @@ function Watchlist.Create(parent, opts)
     end)
     self.list:SetScript("OnSizeChanged", refresh) -- how many rows fit depends on the list height
     Stockist.Events:On("TRACKED_CHANGED", refresh, self)
+    Stockist.Events:On("TUTORIAL_CHANGED", refresh, self)
     Stockist.Events:On("SCAN_COMPLETE", refresh, self)
     Stockist.Events:On("LINK_SELECTED", function(group)
         if group == self.link then refresh() end
@@ -269,9 +282,19 @@ function Watchlist:Scroll(rows)
     self:Refresh()
 end
 
+--- Room for the guide: the panel less its header, footer button and the rows we keep (never fewer than two).
+function Watchlist.GuideRoom(height)
+    return height - HEADER_HEIGHT - FOOTER_HEIGHT - 2 * ROW_HEIGHT
+end
+
 function Watchlist:Refresh()
     if not (Stockist.store and Stockist.tracked) then return end
     local now = Stockist.Clock.now()
+    -- In tutorial mode the guide takes the foot of the list, so the list gets shorter by its height.
+    local guideHeight = self.guide:Fit(Watchlist.GuideRoom(self.frame:GetHeight()))
+    self.list:ClearAllPoints()
+    self.list:SetPoint("TOPLEFT", 0, -HEADER_HEIGHT)
+    self.list:SetPoint("BOTTOMRIGHT", 0, FOOTER_HEIGHT + guideHeight)
     self.rows = Watchlist.Rows(Stockist.store, Stockist.tracked:List(), now, sortName)
     local fit, maxOffset = Watchlist.Capacity(self.list:GetHeight(), #self.rows)
     self.offset = math.min(self.offset, maxOffset)
