@@ -101,8 +101,6 @@ function ChartPanel.Create(parent, opts)
     Stockist.UI.Tooltip.Attach(self.changeHit, "change-scope", function() return self:ChangeHint() end)
     self.recentText = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     self.recentText:SetPoint("LEFT", self.changeText, "RIGHT", 8, 0)
-    Format.UseMoveFont(self.changeText)
-    Format.UseMoveFont(self.recentText)
     self.recentHit = CreateFrame("Frame", nil, frame)
     self.recentHit:SetAllPoints(self.recentText)
     self.recentHit:EnableMouse(true)
@@ -465,6 +463,9 @@ function ChartPanel:Refresh()
     self.available = config.indicators
 
     self.nameText:SetText(Stockist.ItemInfo.ColoredName(state.itemID))
+    Stockist.ItemInfo.RetryUntilNamed(self, { state.itemID }, function()
+        if self.frame:IsVisible() then self:Refresh() end
+    end)
     local parts = PriceChart.HeaderParts(Stockist.store, state.itemID, now, state.timeframe)
     self.priceText:SetText(parts and Format.MoneyDisplay(parts.price) or "")
     self.headerParts = parts

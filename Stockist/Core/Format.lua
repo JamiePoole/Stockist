@@ -108,25 +108,20 @@ function Format.Percent(p)
     return ("%+.2f%%"):format(p)
 end
 
--- Up and down triangles (U+25B2, U+25BC) as UTF-8 bytes, which the game's fonts draw.
-local UP, DOWN = "\226\150\178", "\226\150\188"
+-- Up and down triangles. They are small textures shipped with the addon (Textures/ArrowUp.tga, ArrowDown.tga),
+-- drawn inline in the text, because the glyphs are missing from some of the fonts the panels use.
+local ARROW_SIZE = 10
+local UP = "|TInterface\\AddOns\\Stockist\\Textures\\ArrowUp:" .. ARROW_SIZE .. ":" .. ARROW_SIZE .. "|t"
+local DOWN = "|TInterface\\AddOns\\Stockist\\Textures\\ArrowDown:" .. ARROW_SIZE .. ":" .. ARROW_SIZE .. "|t"
+Format.ARROW_UP, Format.ARROW_DOWN = UP, DOWN
 
---- The triangles in Format.Change are not in every game font (the panels' usual one lacks them; the chat
---- font has them). Give a font string that will show a move the chat font at its own size.
-function Format.UseMoveFont(fontString)
-    local chat = _G.ChatFontNormal
-    local face = chat and chat.GetFont and chat:GetFont() or "Fonts\\ARIALN.TTF"
-    local _, size, flags = fontString:GetFont()
-    fontString:SetFont(face, size or 12, flags or "")
-end
-
---- A move as the markets show it: a green up triangle or red down triangle and the size, "▲3.10%" or
---- "▼0.42%". A move that rounds to nothing is a plain grey "0.00%". Nil gives "".
+--- A move as the markets show it: a green up triangle or a red down triangle, then the size (green or red
+--- too), up-triangle 3.10% or down-triangle 0.42%. A move that rounds to nothing is a plain grey "0.00%". Nil gives "".
 function Format.Change(p)
     if p == nil then return "" end
     local text = ("%.2f%%"):format(math.abs(p))
     local rounded = tonumber(("%.2f"):format(p))
-    if rounded > 0 then return Format.Colored(UP .. text, 0.2, 0.78, 0.45) end
-    if rounded < 0 then return Format.Colored(DOWN .. text, 0.92, 0.3, 0.3) end
+    if rounded > 0 then return UP .. Format.Colored(text, 0.2, 0.78, 0.45) end
+    if rounded < 0 then return DOWN .. Format.Colored(text, 0.92, 0.3, 0.3) end
     return Format.Colored(text, 0.6, 0.6, 0.6)
 end

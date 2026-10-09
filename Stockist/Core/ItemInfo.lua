@@ -56,6 +56,25 @@ function ItemInfo.Request(id)
     if C_Item and C_Item.RequestLoadItemDataByID then C_Item.RequestLoadItemDataByID(id) end
 end
 
+--- Item names can fail to arrive (the client answers a burst of requests unevenly, and a refused one is not
+--- repeated by itself). A panel calls this after drawing: while any of `ids` still has no name it redraws
+--- itself again in a few seconds (which asks again), up to six times, then gives up for good. `owner` is any
+--- table of the panel's own that can hold two counters.
+function ItemInfo.RetryUntilNamed(owner, ids, redraw)
+    local missing = false
+    for _, id in ipairs(ids) do
+        if not ItemInfo.Name(id) then missing = true break end
+    end
+    if not missing then owner.nameTries = 0 return end
+    if (owner.nameTries or 0) >= 6 or owner.nameRetryPending or not C_Timer then return end
+    owner.nameTries = (owner.nameTries or 0) + 1
+    owner.nameRetryPending = true
+    C_Timer.After(5, function()
+        owner.nameRetryPending = false
+        redraw()
+    end)
+end
+
 --- Name wrapped in its rarity colour (grey/white/green/blue/purple/orange...). While the item is
 --- not cached this returns "item:<id>" and asks the client to load it.
 function ItemInfo.ColoredName(id)

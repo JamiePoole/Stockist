@@ -117,8 +117,6 @@ local function buildRow(self, parent)
     row.recent:SetPoint("LEFT", row.price, "RIGHT", 8, 0)
     row.change = row:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall") -- the 24h move, quieter
     row.change:SetPoint("LEFT", row.recent, "RIGHT", 6, 0)
-    Format.UseMoveFont(row.recent)
-    Format.UseMoveFont(row.change)
 
     row:SetScript("OnEnter", function(r)
         r.hoverBg:Show()
@@ -307,6 +305,15 @@ function Watchlist:Refresh()
             end
         end
     end
+
+    local shownIds = {}
+    for slot = 1, fit do
+        local data = self.rows[self.offset + slot]
+        if data then shownIds[#shownIds + 1] = data.id end
+    end
+    Stockist.ItemInfo.RetryUntilNamed(self, shownIds, function()
+        if self.frame:IsVisible() then self:Refresh() end
+    end)
 
     -- The button acts on the item selected in the group.
     local tracked = selected and Stockist.tracked:Has(selected)
