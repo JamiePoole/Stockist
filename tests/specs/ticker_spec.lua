@@ -50,6 +50,16 @@ local function visibleItems(t)
     return out
 end
 
+--- The first lap of items on the tape (the rest are repeats of it).
+local function firstLap(t)
+    local out = {}
+    for i = 1, #t.items do
+        local b = t.copies[i]
+        if b and b.shown and b.itemID then out[#out + 1] = b end
+    end
+    return out
+end
+
 -- Pure part -----------------------------------------------------------------------------------------
 
 test("segments are the tracked items that have a price, in the order given", function()
@@ -62,11 +72,13 @@ test("segments are the tracked items that have a price, in the order given", fun
     Fake.uninstall()
 end)
 
-test("the tape scrolls only when its items are wider than the room", function()
+test("the tape has enough laps to cover the window however far it has moved", function()
     local S = setup()
-    eq(S.Ticker.NeedsScroll(500, 400), true)
-    eq(S.Ticker.NeedsScroll(400, 400), false, "exactly fitting stands still")
-    eq(S.Ticker.NeedsScroll(100, 400), false)
+    local L = S.Ticker.Laps
+    eq(L(300, 2000), 8, "ceil((2000 + margin) / 300) + 1")
+    eq(L(5000, 100), 2, "never fewer than two laps: one to leave and one to arrive")
+    eq(L(0, 100), 1, "nothing to repeat")
+    eq(300 * (L(300, 2000) - 1) >= 2000, true, "the window is covered even at the end of the first lap")
     Fake.uninstall()
 end)
 
@@ -87,7 +99,7 @@ end)
 test("each tracked item with a price becomes one item on the tape: name, price, 24h move", function()
     local S = setup()
     local t = tickerOf(S, 2000)
-    local items = visibleItems(t)
+    local items = firstLap(t)
     eq(#items, 2)
     local ids = { items[1].itemID, items[2].itemID }
     table.sort(ids)
@@ -101,16 +113,35 @@ test("each tracked item with a price becomes one item on the tape: name, price, 
     Fake.uninstall()
 end)
 
-test("when everything fits the tape stands still, with no repeat copies", function()
+test("a short list is repeated to fill the window, so it still moves", function()
     local S = setup()
     local t = tickerOf(S, 2000)
-    eq(t.scrolling, false)
-    eq(#visibleItems(t), 2, "just one copy")
-    t.offset = -50
+    eq(t.scrolling, true, "it moves even though its two items fit")
+    eq(t.laps > 2, true, "repeated several times to cover a wide window")
+    eq(#visibleItems(t), 2 * t.laps)
+    eq(t.loop * (t.laps - 1) >= 2000, true, "the window stays covered at the end of the first lap")
+    eq(t.tape.size[1], t.loop * t.laps)
+    local before = t.offset
     Fake.fire(t.frame, "OnUpdate", 1)
-    eq(t.offset, -50, "nothing moves")
-    t:Refresh()
-    eq(t.offset, 0, "and it sits at the left edge")
+    eq(t.offset < before, true, "and it goes")
+    Fake.uninstall()
+end)
+
+test("six items that fit in a wide window scroll, with no market movers needed", function()
+    local S = setup()
+    S.tracked = S.Tracked.New({})
+    for id = 40, 45 do
+        for h = 47, 0, -1 do S.store:Add({ item = id, ts = NOON - h * HOUR, price = 100 + id + (47 - h), qty = 1 }) end
+        S.tracked:Add(id)
+    end
+    local t = tickerOf(S, 1500)
+    for _, seg in ipairs(t.items) do eq(seg.heading, nil, "no movers heading") end
+    eq(#t.items, 6)
+    eq(t.scrolling, true)
+    eq(t.loop < 1500, true, "the six items alone are narrower than the window")
+    local before = t.offset
+    Fake.fire(t.frame, "OnUpdate", 1)
+    eq(t.offset < before, true, "and it moves")
     Fake.uninstall()
 end)
 
@@ -196,7 +227,7 @@ test("with nothing tracked it shows the biggest movers on the market, under a he
     eq(t.empty.shown, false)
     eq(t.items[1].heading, "Market movers")
     local ids = {}
-    for _, b in ipairs(t.copies) do if b.shown and b.itemID then ids[#ids + 1] = b.itemID end end
+    for _, b in ipairs(firstLap(t)) do ids[#ids + 1] = b.itemID end
     table.sort(ids)
     eq(ids[1], 7); eq(ids[2], 8, "both items with a price and a move")
     eq(t.copies[1].itemID, nil, "the heading is not clickable")
@@ -353,14 +384,15 @@ test("it follows tracking changes, and drops items that are no longer tracked", 
     Fake.uninstall()
 end)
 
-test("the repeat copies are hidden again when the tape stops needing them", function()
+test("extra laps are hidden again when the window gets narrower", function()
     local S = setup()
-    local t = tickerOf(S, 120)
-    eq(#visibleItems(t), 4)
-    t.view:SetSize(5000, 30)
+    local t = tickerOf(S, 3000)
+    local wide = #visibleItems(t)
+    t.view:SetSize(120, 30)
     t:Refresh()
-    eq(#visibleItems(t), 2)
-    eq(t.scrolling, false)
+    eq(#visibleItems(t) < wide, true)
+    eq(#visibleItems(t), 2 * t.laps)
+    eq(t.laps, 2)
     Fake.uninstall()
 end)
 

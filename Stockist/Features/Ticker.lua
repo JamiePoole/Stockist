@@ -4,7 +4,7 @@ local ADDON_NAME, Stockist = ...
 -- tape on a trading screen. With only a few items tracked it is topped up with the biggest movers on the
 -- market, so there is always something moving past. It is built to be small enough to leave on screen on its own (pop it out). Hover
 -- to pause it; click an item to show it in the chart (the panel's link group). Drop an item on it to track it.
--- When everything fits it stands still instead of scrolling. Segments and scrolling maths are pure.
+-- It always moves: a short list is repeated to fill the window. Segments and scrolling maths are pure.
 local Format = Stockist.Format
 
 local Ticker = {}
@@ -15,7 +15,7 @@ Ticker.HELP_KEYS = { "ticker-item" }
 
 local SPEED = 38        -- pixels per second
 local GAP = 36          -- space between one item and the next
-local EDGE = 8          -- left margin when the tape stands still
+local EDGE = 8          -- left margin before the first item
 local BUTTON_ROOM = 32  -- kept clear on the right for the pop-out button
 local MOVERS = 20       -- the number of biggest movers added to a short list
 local FILL_TO = 6       -- fewer tracked items than this and the tape is topped up with market movers
@@ -70,9 +70,11 @@ function Ticker.Move(store, itemID, now)
     return nil
 end
 
---- Whether the tape has to scroll: it does when its items are wider than the room.
-function Ticker.NeedsScroll(contentWidth, viewWidth)
-    return contentWidth > viewWidth
+--- How many laps of the items the tape needs: enough that, however far it has moved within one lap, the
+--- window is still covered. `loop` is the width of one lap, `viewWidth` the window's.
+function Ticker.Laps(loop, viewWidth)
+    if loop <= 0 then return 1 end
+    return math.max(2, math.ceil((viewWidth + EDGE) / loop) + 1)
 end
 
 --- The tape's offset after `dt` seconds. The tape is the items twice over, side by side, so when the first
@@ -206,7 +208,8 @@ function Ticker:Refresh()
     end
     self.empty:SetShown(#self.items == 0)
 
-    -- Lay one copy of the items out, measuring as we go; a second copy follows when the tape scrolls.
+    -- Lay one lap of the items out, measuring as we go. The tape is that lap repeated until it is longer than
+    -- the window by a whole lap, so it can move forever without a gap, however few items there are.
     local x, n = 0, #self.items
     local widths, starts = {}, {}
     for i, seg in ipairs(self.items) do
@@ -222,31 +225,29 @@ function Ticker:Refresh()
         x = x + w + GAP
     end
     self.loop = x
-    self.scrolling = n > 0 and Ticker.NeedsScroll(x - GAP, self.view:GetWidth() - EDGE)
+    self.scrolling = n > 0
+    self.laps = n > 0 and Ticker.Laps(x, self.view:GetWidth()) or 1
 
-    -- The repeat copies (indices n+1 .. 2n) exist only while scrolling.
-    for i = 1, n do
-        local idx = n + i
-        local btn = self.copies[idx] or buildItem(self, idx)
-        if self.scrolling then
+    -- Laps 2 and on repeat the first.
+    for lap = 2, self.laps do
+        for i = 1, n do
+            local idx = (lap - 1) * n + i
+            local btn = self.copies[idx] or buildItem(self, idx)
             btn.itemID = self.items[i].id
             btn.label:SetText(segmentText(self.items[i]))
             btn:SetSize(widths[i] + GAP, 20)
             btn:ClearAllPoints()
-            btn:SetPoint("LEFT", self.tape, "LEFT", self.loop + starts[i], 0)
+            btn:SetPoint("LEFT", self.tape, "LEFT", (lap - 1) * self.loop + starts[i], 0)
             btn:Show()
-        else
-            btn.itemID = nil
-            btn:Hide()
         end
     end
-    for i = 2 * n + 1, #self.copies do self.copies[i].itemID = nil; self.copies[i]:Hide() end
+    for idx = self.laps * n + 1, #self.copies do self.copies[idx].itemID = nil; self.copies[idx]:Hide() end
     local shownIds = {}
     for _, seg in ipairs(self.items) do if seg.id then shownIds[#shownIds + 1] = seg.id end end
     Stockist.ItemInfo.RetryUntilNamed(self, shownIds, function()
         if self.frame:IsVisible() then self:Refresh() end
     end)
-    self.tape:SetSize(self.scrolling and self.loop * 2 or math.max(1, self.loop), 20)
+    self.tape:SetSize(math.max(1, self.loop * self.laps), 20)
     if not self.scrolling then self.offset = 0 end
     self:Place()
 end
