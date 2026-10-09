@@ -61,6 +61,12 @@ R("movers-tracked", "Watchlist only", "Narrows the lists to the items on your wa
     "Off, the lists cover the whole market, including items you have never looked at. On, they show "
     .. "only how your own watchlist items are moving.")
 
+R("status-bar", "Data status", "How fresh your price data is, and when the next scan can happen.",
+    "The age is green while the prices are recent (within 30 minutes), amber when they are getting old "
+    .. "(up to 3 hours) and red when they are older than that. The game only allows a full scan about every "
+    .. "15 minutes, and only while the Auction House is open, so the countdown says when the next one can "
+    .. "start. Items is how many we hold prices for.")
+
 R("tutorial", "Tutorial tips", "Turns the longer explanations on or off.",
     "When on, buttons and the chart show plain-language descriptions of what each thing means. "
     .. "Turn it off once you know your way around.")

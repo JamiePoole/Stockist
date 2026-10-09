@@ -27,7 +27,7 @@ Popping out is remembered for the session only: after a relog `/stockist` opens 
 | Ticker | a thin strip scrolling the tracked items with price and 24h move | v1. Built (`Features/Ticker.lua`): hover pauses, click selects, drop tracks; always moves, repeating a short list to fill the window |
 | Movers | biggest risers and fallers | v1. Built (`Features/Movers.lua`): rising and falling lists, whole market or watchlist only; click selects. Weighted indexes (Herb/Cloth) are still to do (#14) |
 | Depth | units listed at each price | v1. Local scan only, never shared |
-| Status bar | data age, peers, next scan | v1 |
+| Status bar | data age, peers, next scan | v1. Built (`Features/StatusBar.lua`): freshness-coloured age, scan countdown, item counts, a Scan now button; peers arrive with data sharing |
 | My auctions | your listings and where they sit | next. See below |
 | Craft margins | cost to craft vs sale price over time | next. Needs recipe data |
 | Compare | several items rebased to 0% | later |
