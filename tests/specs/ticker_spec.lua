@@ -495,3 +495,94 @@ test("a name that is already there schedules nothing", function()
     eq(owner.nameRetryPending, nil)
     Fake.uninstall()
 end)
+
+-- Dropping onto the items themselves ----------------------------------------------------------------
+
+--- Put an item on a pretend cursor; the drop clears it, as the game does.
+local function cursorWith(itemID)
+    local c = { item = itemID, cleared = 0 }
+    GetCursorInfo = function() if c.item then return "item", c.item end end
+    ClearCursor = function() c.item = nil; c.cleared = c.cleared + 1 end
+    return c
+end
+
+local function endCursor() GetCursorInfo, ClearCursor = nil, nil end
+
+test("letting go of an item over one of the ticker's items tracks it, and does not select the item under it", function()
+    local S = setup()
+    local t = tickerOf(S, 2000)
+    local over
+    for _, b in ipairs(visibleItems(t)) do if b.itemID == 7 then over = b end end
+    local c = cursorWith(99)
+    Fake.fire(over, "OnReceiveDrag")
+    eq(S.tracked:Has(99), true, "the dropped item is now tracked")
+    eq(S.Link.Get("A"), 99, "and it is the one shown in the chart")
+    eq(c.cleared, 1, "the item went back to where it came from")
+    Fake.fire(over, "OnClick", "LeftButton") -- the click that follows the drop
+    eq(S.Link.Get("A"), 99, "the item under the cursor was not selected as well")
+    endCursor()
+    Fake.uninstall()
+end)
+
+test("a click-drop (mouse up, then click) over an item behaves the same", function()
+    local S = setup()
+    local t = tickerOf(S, 2000)
+    local over
+    for _, b in ipairs(visibleItems(t)) do if b.itemID == 8 then over = b end end
+    cursorWith(55)
+    Fake.fire(over, "OnMouseUp", "LeftButton")
+    Fake.fire(over, "OnClick", "LeftButton")
+    eq(S.tracked:Has(55), true)
+    eq(S.Link.Get("A"), 55, "the dropped item, not the one under the cursor")
+    endCursor()
+    Fake.uninstall()
+end)
+
+test("every lap's copy of an item takes drops, and so does the heading", function()
+    local S = setup()
+    S.tracked = S.Tracked.New({})
+    local t = tickerOf(S, 2000)
+    local cursor = cursorWith(1)
+    local count = 0
+    for _, b in ipairs(t.copies) do
+        if b.shown then
+            S.Link.Select("A", nil)
+            cursor.item = 40 + count
+            Fake.fire(b, "OnReceiveDrag")
+            eq(S.tracked:Has(40 + count), true, "copy " .. count)
+            count = count + 1
+        end
+    end
+    eq(count > 3, true, "several copies were tried, repeats and the market movers heading included")
+    endCursor()
+    Fake.uninstall()
+end)
+
+test("a plain click on an item still selects it, including right after an earlier drop", function()
+    local S = setup()
+    local t = tickerOf(S, 2000)
+    local over
+    for _, b in ipairs(visibleItems(t)) do if b.itemID == 7 then over = b end end
+    cursorWith(99)
+    Fake.fire(over, "OnReceiveDrag")
+    Fake.flush() -- the next frame: the drop is over
+    endCursor()
+    Fake.fire(over, "OnClick", "LeftButton")
+    eq(S.Link.Get("A"), 7, "an ordinary click selects as before")
+    Fake.uninstall()
+end)
+
+test("while an item is on the cursor a click on a watchlist row or a mover selects nothing", function()
+    local S = setup()
+    local w = S.Watchlist.Create(UIParent, { link = "A" })
+    w.list:SetSize(220, 300); w:Refresh()
+    local row = w.rowFrames[1]
+    cursorWith(99)
+    S.Link.Select("A", 5)
+    Fake.fire(row, "OnClick", "LeftButton")
+    eq(S.Link.Get("A"), 5, "the row under the cursor was not selected")
+    endCursor()
+    Fake.fire(row, "OnClick", "LeftButton")
+    eq(S.Link.Get("A") ~= 5, true, "with an empty cursor it selects")
+    Fake.uninstall()
+end)

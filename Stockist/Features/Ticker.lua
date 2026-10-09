@@ -168,8 +168,11 @@ local function buildItem(self, index)
     btn.label = btn:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     btn.label:SetPoint("LEFT", 0, 0)
     btn:SetScript("OnClick", function(b)
+        if Stockist.ItemPicker.ClickIsDrop() then return end -- an item let go over it, not a click on it
         if b.itemID then self:Select(b.itemID) end
     end)
+    -- The items cover the strip edge to edge, so each one takes drops itself (the strip's own frame is under them).
+    Stockist.ItemPicker.AcceptDrops(btn, function(itemID) self:Drop(itemID) end)
     btn:SetScript("OnEnter", function(b)
         GameTooltip:SetOwner(b, "ANCHOR_BOTTOM")
         local _, short = Stockist.Help.Lines("ticker-item")

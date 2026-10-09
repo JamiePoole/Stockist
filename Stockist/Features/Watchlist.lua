@@ -143,6 +143,7 @@ local function buildRow(self, parent)
         GameTooltip:Hide()
     end)
     row:SetScript("OnClick", function(r)
+        if Stockist.ItemPicker.ClickIsDrop() then return end -- an item let go over it, not a click on it
         if r.itemID then self:Select(r.itemID) end
     end)
     Stockist.ItemPicker.AcceptDrops(row, function(itemID) self:Drop(itemID) end)

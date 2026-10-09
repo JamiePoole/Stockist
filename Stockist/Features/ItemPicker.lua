@@ -505,6 +505,18 @@ end
 --- Make `frame` take dropped items: `onPick(itemID)` runs for an item let go over it, or clicked onto it while
 --- the cursor carries one. `opts.hint = true` shades the frame and says "Drop to chart this item" (or
 --- `opts.text`) while an item is on the cursor. The frame must already take the mouse (EnableMouse); existing handlers are kept.
+--- Is an item on the cursor right now?
+function Picker.CarryingItem() return itemOnCursor() ~= nil end
+
+local justDropped = false
+
+--- Did a drop just happen (this frame)? A button that is also a drop target asks this in its click handler, so
+--- letting go of an item over it does not also count as a plain click on it.
+function Picker.JustDropped() return justDropped end
+
+--- A button that selects an item when clicked should do nothing while an item is on the cursor or just dropped.
+function Picker.ClickIsDrop() return justDropped or itemOnCursor() ~= nil end
+
 function Picker.AcceptDrops(frame, onPick, opts)
     local lastTime
     local function receive()
@@ -515,6 +527,8 @@ function Picker.AcceptDrops(frame, onPick, opts)
         if GetTime and lastTime == now then return end
         lastTime = now
         ClearCursor() -- the item goes back where it came from
+        justDropped = true -- the click that follows the drop on a button is not a selection
+        if C_Timer then C_Timer.After(0, function() justDropped = false end) end
         onPick(itemID)
     end
     if frame.SetScript and frame:GetScript("OnReceiveDrag") then
