@@ -55,4 +55,5 @@ Features\StatusBar.lua
 Features\Workspace.lua
 Features\StatusCommands.lua
 Features\DataCleanup.lua
+Features\AuctionHouseGuard.lua
 Core\Bootstrap.lua

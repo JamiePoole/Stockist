@@ -362,3 +362,87 @@ test("an API error mid-scan fails the scan instead of crashing", function()
     eq(events[#events][1], "SCAN_FAILED")
     eq(S.Scanner.inProgress, false)
 end)
+
+-- Closing the Auction House during a scan --------------------------------------------------------------
+
+local function manyAuctions(n)
+    local out = {}
+    for i = 1, n do out[i] = { item = 10 + (i % 5), count = 1, buyout = 100 + i } end
+    return out
+end
+
+test("a scan reports its progress, waiting first and then reading, climbing to the end", function()
+    local S, frame, events, flush = setup(manyAuctions(1200))
+    local seen = {}
+    S.Events:On("SCAN_PROGRESS", function(fraction, phase) seen[#seen + 1] = { fraction, phase } end)
+    fire(frame, "AUCTION_HOUSE_SHOW")
+    eq(seen[1][1], 0); eq(seen[1][2], "waiting", "first: waiting for the server's answer")
+    eq(S.Scanner.phase, "waiting")
+    fire(frame, "REPLICATE_ITEM_LIST_UPDATE")
+    flush()
+    eq(seen[2][2], "reading"); eq(seen[2][1], 0.1)
+    for i = 3, #seen do eq(seen[i][1] >= seen[i - 1][1], true, "never goes backwards") end
+    near(seen[#seen][1], 1, 1e-9)
+    eq(S.Scanner.phase, nil, "no phase once the scan is over")
+    eq(events[#events][1], "SCAN_COMPLETE")
+end)
+
+test("closing while still waiting for the server's answer cancels the scan and says why", function()
+    local S, frame, events = setup({ { item = 10, count = 1, buyout = 100 } })
+    fire(frame, "AUCTION_HOUSE_SHOW")
+    fire(frame, "AUCTION_HOUSE_CLOSED")
+    eq(events[#events][1], "SCAN_FAILED")
+    eq(events[#events][2]:find("waiting for the server's answer", 1, true) ~= nil, true, events[#events][2])
+    eq(S.Scanner.inProgress, false)
+    is_nil(S.db.scan.last)
+end)
+
+test("closing once the answer is here does not stop the reading, and the scan is saved if the list is still readable", function()
+    local S, frame, events, flush = setup(manyAuctions(1200))
+    fire(frame, "AUCTION_HOUSE_SHOW")
+    fire(frame, "REPLICATE_ITEM_LIST_UPDATE") -- the first batch is read straight away, the rest is queued
+    fire(frame, "AUCTION_HOUSE_CLOSED")
+    eq(S.Scanner.inProgress, true, "still going: the data had already arrived")
+    flush()
+    eq(events[#events][1], "SCAN_COMPLETE", "finished and saved though the window closed")
+    eq(S.db.scan.last ~= nil, true)
+end)
+
+test("closing while reading when the list is gone cancels the scan, says how far it got and saves nothing", function()
+    local S, frame, events, flush = setup(manyAuctions(1200))
+    local real = C_AuctionHouse.GetReplicateItemInfo
+    local gone = false
+    C_AuctionHouse.GetReplicateItemInfo = function(i)
+        if gone then return nil end -- the client has cleared the list
+        return real(i)
+    end
+    fire(frame, "AUCTION_HOUSE_SHOW")
+    fire(frame, "REPLICATE_ITEM_LIST_UPDATE")
+    fire(frame, "AUCTION_HOUSE_CLOSED")
+    gone = true
+    flush()
+    eq(events[#events][1], "SCAN_FAILED")
+    local reason = events[#events][2]
+    eq(reason:find("closed while the listings were being read", 1, true) ~= nil, true, reason)
+    eq(reason:find("41%% read") ~= nil or reason:find("%d+%% read") ~= nil, true, "says how much was read: " .. reason)
+    eq(reason:find("nothing was saved", 1, true) ~= nil, true)
+    is_nil(S.db.scan.last, "no half-read scan was recorded")
+    is_nil(S.store:Latest(10), "and no reading from it")
+    eq(S.Scanner.inProgress, false)
+end)
+
+test("rows with no item are only a sign the list is gone while the window is closed", function()
+    local auctions = manyAuctions(600)
+    auctions[250].item = nil -- an odd row with the window open is simply skipped
+    local S, frame, events, flush = setup(auctions)
+    local real = C_AuctionHouse.GetReplicateItemInfo
+    C_AuctionHouse.GetReplicateItemInfo = function(i)
+        local a = auctions[i + 1]
+        if a and a.item == nil then return "n", 0, 1, 1, true, 0, 0, 0, 0, 100, 0, "", "", "", "", 0, nil, true end
+        return real(i)
+    end
+    fire(frame, "AUCTION_HOUSE_SHOW")
+    fire(frame, "REPLICATE_ITEM_LIST_UPDATE")
+    flush()
+    eq(events[#events][1], "SCAN_COMPLETE", "the scan went on past the odd row")
+end)

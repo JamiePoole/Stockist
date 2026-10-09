@@ -239,3 +239,20 @@ test("every help key the status bar uses has a topic", function()
     for _, key in ipairs(S.StatusBar.HELP_KEYS) do eq(S.Help.topics:Get(key) ~= nil, true, key) end
     Fake.uninstall()
 end)
+
+test("while scanning the status line shows how far the scan has got", function()
+    local S = setup()
+    eq(S.StatusBar.Parts(info({ scanning = true, progress = 0.4 }))[2][1], "scanning 40%")
+    eq(S.StatusBar.Parts(info({ scanning = true, progress = 0 }))[2][1], "scanning...", "waiting for the server: no percentage yet")
+    eq(S.StatusBar.Parts(info({ scanning = true }))[2][1], "scanning...")
+    Fake.uninstall()
+end)
+
+test("the status bar redraws on progress, so the percentage moves", function()
+    local S, scan = setup()
+    local bar = S.StatusBar.Create(UIParent)
+    S.Scanner.inProgress, S.Scanner.progress = true, 0.65
+    S.Events:Fire("SCAN_PROGRESS", 0.65, "reading")
+    eq(bar.text.text:find("scanning 65%", 1, true) ~= nil, true, bar.text.text)
+    Fake.uninstall()
+end)

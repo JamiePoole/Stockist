@@ -11,7 +11,10 @@ local ADDON_NAME, Stockist = ...
 -- The server allows a replicate about every 15 minutes (Config.scan.minIntervalSec).
 local Aggregate = Stockist.Aggregate
 
-local Scanner = { inProgress = false, ahOpen = false }
+-- While a scan runs it is in one of two phases: "waiting" (the request is made and we wait for the server's
+-- answer, which can take a while) and "reading" (the answer is here and we are walking the list). `progress` is
+-- 0 to 1 across both and is announced as SCAN_PROGRESS (fraction, phase).
+local Scanner = { inProgress = false, ahOpen = false, phase = nil, progress = 0 }
 Stockist.Scanner = Scanner
 
 local BATCH = 500
@@ -50,6 +53,12 @@ end
 
 --- Begin a scan. `force` skips our own wait (the server may still ignore the request). Returns true, or
 --- false plus a human-readable reason.
+--- Record how far the running scan has got and tell whoever is showing it.
+function Scanner:SetProgress(fraction, phase)
+    self.progress, self.phase = fraction, phase or self.phase
+    Stockist.Events:Fire("SCAN_PROGRESS", fraction, self.phase)
+end
+
 function Scanner:Start(force)
     if self.inProgress then return false, "a scan is already running" end
     if not self.ahOpen then return false, "open the Auction House first" end
@@ -62,6 +71,8 @@ function Scanner:Start(force)
     local now = Stockist.Clock.now()
     self.inProgress = true
     self.gotAnswer = false
+    self.closedWhileReading = false
+    self.progress, self.phase = 0, "waiting"
     self.scanId = (self.scanId or 0) + 1
     local id = self.scanId
     local previousRequest = scan.requested
@@ -80,6 +91,7 @@ function Scanner:Start(force)
     self.currentRequest = entry
     logRequest(scan, entry)
     Stockist.Events:Fire("SCAN_STARTED")
+    self:SetProgress(0, "waiting")
 
     C_Timer.After(ANSWER_TIMEOUT, function()
         if self.inProgress and self.scanId == id and not self.gotAnswer then
@@ -137,6 +149,7 @@ end
 function Scanner:Abort(reason)
     if not self.inProgress then return end
     self.inProgress = false
+    self.phase = nil
     self.frame:UnregisterEvent("REPLICATE_ITEM_LIST_UPDATE")
     local wait = Stockist.db and self:SecondsUntilNextScan() or 0
     if wait > 0 then reason = reason .. ". Next scan in " .. waitText(wait) end
@@ -170,6 +183,7 @@ function Scanner:Finish(tiersByItem, classes)
     Stockist.db.scan.last = now
     Stockist.db.scan.items = recorded
     self.inProgress = false
+    self.phase = nil
     Stockist.Events:Fire("SCAN_COMPLETE", recorded, now)
 end
 
@@ -178,6 +192,8 @@ function Scanner:Collect()
     local total = C_AuctionHouse.GetNumReplicateItems()
     local tiersByItem, classes = {}, {}
     local index = 0
+    local lost = false
+    self:SetProgress(0.1, "reading") -- the answer is here; the rest is reading it
 
     local function step()
         if not self.inProgress then return end
@@ -187,6 +203,9 @@ function Scanner:Collect()
                 local _, _, count, _, _, _, _, _, _, buyout, _, _, _, _, _, _, itemID =
                     C_AuctionHouse.GetReplicateItemInfo(index)
                 index = index + 1
+                -- If the window closed while we were reading, the list may be gone: a row with no item at all
+                -- (not merely one we skip) means the rest cannot be read, and a half-read list is not saved.
+                if itemID == nil and not self.ahOpen then lost = true return end
                 if itemID and itemID > 0 and count and count > 0 and buyout and buyout > 0 then
                     local classID, subClassID = itemClass(itemID)
                     -- Trade goods are the commodities we chart by default. An item the player tracks is
@@ -206,6 +225,11 @@ function Scanner:Collect()
         if not ok then
             return self:Abort("error reading auctions: " .. tostring(err))
         end
+        if lost then
+            local percent = total > 0 and math.floor(100 * index / total) or 0
+            return self:Abort(("the Auction House closed while the listings were being read (%d%% read), so nothing was saved"):format(percent))
+        end
+        self:SetProgress(0.1 + 0.9 * (total > 0 and index / total or 1), "reading")
         if index >= total then
             -- If saving the results fails, still release the scan; a stuck "in progress" blocks every later one.
             local saved, saveErr = pcall(self.Finish, self, tiersByItem, classes)
@@ -236,7 +260,12 @@ frame:SetScript("OnEvent", function(_, event)
         Scanner.ahOpen = false
         Scanner:StopWatching()
         Stockist.Events:Fire("AH_CLOSED")
-        Scanner:Abort("Auction House closed during the scan")
+        if Scanner.inProgress and Scanner.phase == "reading" then
+            -- The answer is already here: carry on reading. If the list turns out to be gone, Collect says so.
+            Scanner.closedWhileReading = true
+        else
+            Scanner:Abort("the Auction House closed while waiting for the server's answer, so the scan was cancelled")
+        end
     elseif event == "REPLICATE_ITEM_LIST_UPDATE" then
         Scanner:NoteAnswered()
         frame:UnregisterEvent("REPLICATE_ITEM_LIST_UPDATE")

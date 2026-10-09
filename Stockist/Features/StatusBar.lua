@@ -55,7 +55,8 @@ function StatusBar.Parts(info)
     end
 
     if info.scanning then
-        parts[#parts + 1] = { "scanning...", BLUE }
+        local text = info.progress and info.progress > 0 and ("scanning " .. math.floor(info.progress * 100) .. "%") or "scanning..."
+        parts[#parts + 1] = { text, BLUE }
     elseif info.wait and info.wait > 0 then
         parts[#parts + 1] = { "next scan in " .. countdown(info.wait), GREY }
     elseif info.ahOpen then
@@ -104,6 +105,7 @@ local function gather()
         wait = scanner and Stockist.db and scanner:SecondsUntilNextScan() or 0,
         ahOpen = scanner and scanner.ahOpen or false,
         scanning = scanner and scanner.inProgress or false,
+        progress = scanner and scanner.inProgress and scanner.progress or nil,
         autoOn = scanner and scanner:AutoEnabled(),
         items = count,
         tracked = Stockist.tracked and Stockist.tracked:Count() or 0,
@@ -156,7 +158,7 @@ function StatusBar.Create(parent, opts)
         if self.stale then self.stale = false; self:Refresh() end
     end)
     for _, event in ipairs({ "SCAN_STARTED", "SCAN_COMPLETE", "SCAN_FAILED", "SCAN_SKIPPED", "AH_OPENED",
-        "AH_CLOSED", "TRACKED_CHANGED" }) do
+        "AH_CLOSED", "TRACKED_CHANGED", "SCAN_PROGRESS" }) do
         Stockist.Events:On(event, refresh, self)
     end
     -- The ages and the countdown move on their own: redraw once a second while on screen, only when the words change.
