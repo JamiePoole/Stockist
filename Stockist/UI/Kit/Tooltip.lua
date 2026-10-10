@@ -10,29 +10,42 @@ Stockist.UI = UI
 local Tooltip = {}
 UI.Tooltip = Tooltip
 
+-- Our own tooltip frame, never the shared GameTooltip. The whole game UI uses GameTooltip, and calling its methods
+-- from addon code marks it as tainted: later, when the game fills it from its own secure code (a unit's health
+-- bar, an item comparison), values the game marks secret get compared in code tainted by Stockist, and Lua
+-- raises "attempt to compare a secret number value (execution tainted by 'Stockist')". A private tooltip of the
+-- same kind shows our text and items without that.
+local frame
+function Tooltip.Frame()
+    if not frame then
+        frame = CreateFrame("GameTooltip", "StockistTooltip", UIParent, "GameTooltipTemplate")
+    end
+    return frame
+end
+
 local function show(frame, key, extra)
     local title, short, detail = Stockist.Help.Lines(key)
     if not title then return end
-    GameTooltip:SetOwner(frame, "ANCHOR_RIGHT")
-    GameTooltip:AddLine(title, 1, 1, 1)
-    if short then GameTooltip:AddLine(short, 0.8, 0.8, 0.8, true) end
+    Stockist.UI.Tooltip.Frame():SetOwner(frame, "ANCHOR_RIGHT")
+    Stockist.UI.Tooltip.Frame():AddLine(title, 1, 1, 1)
+    if short then Stockist.UI.Tooltip.Frame():AddLine(short, 0.8, 0.8, 0.8, true) end
     if detail then
-        GameTooltip:AddLine(" ")
-        GameTooltip:AddLine(detail, 0.55, 0.8, 1, true)
+        Stockist.UI.Tooltip.Frame():AddLine(" ")
+        Stockist.UI.Tooltip.Frame():AddLine(detail, 0.55, 0.8, 1, true)
     end
     -- A situational line, e.g. why a button is disabled right now.
     local note = extra and extra()
     if note then
-        GameTooltip:AddLine(" ")
-        GameTooltip:AddLine(note, 1, 0.55, 0.25, true)
+        Stockist.UI.Tooltip.Frame():AddLine(" ")
+        Stockist.UI.Tooltip.Frame():AddLine(note, 1, 0.55, 0.25, true)
     end
-    GameTooltip:Show()
+    Stockist.UI.Tooltip.Frame():Show()
 end
 
 --- `extra` (optional) is a function returning one more line to show, or nil.
 function Tooltip.Attach(frame, key, extra)
     frame:HookScript("OnEnter", function(self) show(self, key, extra) end)
-    frame:HookScript("OnLeave", function() GameTooltip:Hide() end)
+    frame:HookScript("OnLeave", function() Stockist.UI.Tooltip.Frame():Hide() end)
 end
 
 --- Enable or disable a button while keeping its tooltip working. A normally disabled button stops

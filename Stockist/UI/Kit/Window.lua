@@ -115,7 +115,7 @@ function Window.Create(opts)
     end
     help:SetScript("OnClick", function()
         Stockist.Help.SetTutorial(not Stockist.Help.TutorialEnabled())
-        GameTooltip:Hide()
+        Stockist.UI.Tooltip.Frame():Hide()
     end)
     UI.Tooltip.Attach(help, "tutorial")
     Stockist.Events:On("TUTORIAL_CHANGED", paintHelp)

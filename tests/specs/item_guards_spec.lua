@@ -128,7 +128,7 @@ test("the panel shows a 404 for an item that does not exist, and no chart", func
     eq(panel.priceText.text, "")
     -- hovering the (non-)name does not ask the game for a tooltip of nothing
     Fake.fire(panel.nameHit, "OnEnter")
-    eq(Fake.called(GameTooltip, "SetItemByID"), false)
+    eq(Fake.called(S.UI.Tooltip.Frame(), "SetItemByID"), false)
     cleanup()
 end)
 

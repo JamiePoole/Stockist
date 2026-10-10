@@ -179,13 +179,13 @@ local function buildItem(self, index)
     end)
     btn:EnableMouse(not Stockist.ItemPicker.CarryingItem()) -- see Ticker:LetDropsThrough
     btn:SetScript("OnEnter", function(b)
-        GameTooltip:SetOwner(b, "ANCHOR_BOTTOM")
+        Stockist.UI.Tooltip.Frame():SetOwner(b, "ANCHOR_BOTTOM")
         local _, short = Stockist.Help.Lines("ticker-item")
-        GameTooltip:AddLine(b.itemID and Stockist.ItemInfo.ColoredName(b.itemID) or "", 1, 1, 1)
-        if short then GameTooltip:AddLine(short, 0.8, 0.8, 0.8, true) end
-        GameTooltip:Show()
+        Stockist.UI.Tooltip.Frame():AddLine(b.itemID and Stockist.ItemInfo.ColoredName(b.itemID) or "", 1, 1, 1)
+        if short then Stockist.UI.Tooltip.Frame():AddLine(short, 0.8, 0.8, 0.8, true) end
+        Stockist.UI.Tooltip.Frame():Show()
     end)
-    btn:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    btn:SetScript("OnLeave", function() Stockist.UI.Tooltip.Frame():Hide() end)
     self.copies[index] = btn
     return btn
 end
