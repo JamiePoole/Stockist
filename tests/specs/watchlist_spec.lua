@@ -454,3 +454,24 @@ test("the arrow textures exist and are valid 32-bit TGAs the game can load, and 
     eq(S.Format.Change(-2):find(S.Format.ARROW_DOWN, 1, true) ~= nil, true, "a fall uses the down arrow")
     Fake.uninstall()
 end)
+
+test("every panel shows the cheapest price, while moves and lines follow the median values", function()
+    local S = setup()
+    for h = 47, 0, -1 do
+        S.store:Add({ item = 70, ts = NOON - h * HOUR, price = 1000 + (47 - h) * 10, min = 800 + (47 - h) * 10, qty = 5 })
+    end
+    S.tracked:Add(70)
+    local rows = S.Watchlist.Rows(S.store, { 70 }, NOON, function() return "n" end)
+    eq(rows[1].price, 1470 - 200, "the watchlist shows the cheapest unit (the median is 1470)")
+    local parts = S.PriceChart.HeaderParts(S.store, 70, NOON, "1D")
+    eq(parts.price, 1270, "so does the chart header")
+    -- the move compares median with median, so the cheap listings do not distort it
+    local ref = S.store:PriceAt(70, NOON - DAY)
+    local expected = (1470 - ref) / ref * 100
+    near(parts.change, expected, 1e-9)
+    local d = S.Movers.Compute(S.store, { 70 }, NOON, function() return "n" end, 5)
+    eq(d.risers[1].price, 1270, "and the movers list")
+    local seg = S.Ticker.Segments(rows)
+    eq(seg[1].price, 1270, "and the ticker")
+    Fake.uninstall()
+end)

@@ -172,6 +172,9 @@ function Scanner:Finish(tiersByItem, classes)
     local recorded = 0
     for itemID, tiers in pairs(tiersByItem) do
         local agg = Aggregate.Reduce(tiers, cfg.cheapestUnits)
+        -- Two prices per reading: `price`, the median of the cheapest units, is what charts and moves follow (it is
+        -- steadier than any single listing); `min`, the cheapest unit, is the price shown as "the price" and the
+        -- low of a candle.
         if agg and Stockist.store:Add({
             item = itemID, ts = now, price = agg.median, min = agg.min, qty = agg.qty,
         }) then

@@ -11,8 +11,10 @@ function Rollup.BucketStart(ts, size)
     return ts - (ts % size)
 end
 
-function Rollup.NewCandle(t, price, qty, ts)
-    return { t = t, o = price, h = price, l = price, c = price, q = qty, n = 1, ot = ts, ct = ts }
+--- `price` is the value the candle follows (the median of the cheapest units); `low` (optional) is the cheapest
+--- unit price seen, which sets the candle's low so it shows the lowest price, not just the lowest median.
+function Rollup.NewCandle(t, price, qty, ts, low)
+    return { t = t, o = price, h = price, l = math.min(low or price, price), c = price, q = qty, n = 1, ot = ts, ct = ts }
 end
 
 local FIELDS = { "t", "o", "h", "l", "c", "q", "n", "ot", "ct" }

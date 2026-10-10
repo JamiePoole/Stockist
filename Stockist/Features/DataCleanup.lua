@@ -55,7 +55,7 @@ local function tracked()
     say(("%d tracked items:"):format(#list))
     for _, id in ipairs(list) do
         local last = Stockist.store:Latest(id)
-        say(("  %s  %s"):format(Stockist.ItemName(id), last and Format.Money(last.price) or "no data yet"))
+        say(("  %s  %s"):format(Stockist.ItemName(id), last and Format.Money(Stockist.ReadingStore.Headline(last)) or "no data yet"))
     end
 end
 

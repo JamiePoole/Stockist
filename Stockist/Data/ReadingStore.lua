@@ -105,7 +105,9 @@ function Store:Ticks(itemID, fromTs)
     return out
 end
 
---- Record one reading { item, ts, price, min?, qty }. `price` is the headline price in copper.
+--- Record one reading { item, ts, price, min?, qty }. `price` is the value charts and moves follow (copper): the
+--- median of the cheapest units. `min` is the cheapest unit price, shown as the item's price, and it sets the low
+--- of the candle (so a candle's low is the lowest price seen, its high the highest median).
 --- Returns false (and records nothing) if the reading is malformed.
 function Store:Add(reading)
     if not validReading(reading) then return false end
@@ -121,7 +123,7 @@ function Store:Add(reading)
     end
     for res, size in pairs(RESOLUTIONS) do
         local t = Rollup.BucketStart(reading.ts, size)
-        local candle = Rollup.NewCandle(t, reading.price, reading.qty, reading.ts)
+        local candle = Rollup.NewCandle(t, reading.price, reading.qty, reading.ts, reading.min)
         local existing = it[res][t]
         it[res][t] = existing and Rollup.Merge(existing, candle) or candle
     end
@@ -144,6 +146,11 @@ end
 
 function Store:GetMeta(itemID)
     return self.db.meta[itemID]
+end
+
+--- The price to show for a reading: the cheapest unit listed (what the Auction House shows as the price).
+function Store.Headline(reading)
+    return reading.min or reading.price
 end
 
 --- Most recent reading for an item, or nil.
