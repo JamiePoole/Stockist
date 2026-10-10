@@ -9,7 +9,6 @@ local ADDON_NAME, Stockist = ...
 local Guard = {}
 Stockist.AuctionHouseGuard = Guard
 
-local POPUP = "STOCKIST_CLOSE_AUCTION_HOUSE"
 local BANNER_HEIGHT = 28
 
 ---------------------------------------------------------------------------------------------------
@@ -76,6 +75,75 @@ local function hideBanner()
     if banner then banner.frame:Hide() end
 end
 
+-- The question is our own small dialog, not the game's StaticPopup system: showing a StaticPopup from addon
+-- code taints the shared popup frames, which the game then reuses for its own prompts (and trips over protected
+-- calls). Our own frame shares nothing with the game.
+local dialog
+
+local function buildDialog()
+    local frame = CreateFrame("Frame", "StockistConfirmClose", UIParent, "BackdropTemplate")
+    frame:SetSize(400, 150)
+    frame:SetPoint("CENTER", UIParent, "CENTER", 0, 140)
+    frame:SetFrameStrata("FULLSCREEN_DIALOG")
+    frame:EnableMouse(true)
+    frame:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8x8", edgeFile = "Interface\\Buttons\\WHITE8x8", edgeSize = 1 })
+    frame:SetBackdropColor(0.06, 0.07, 0.09, 0.98)
+    frame:SetBackdropBorderColor(0.2, 0.5, 1, 0.9)
+    local title = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    title:SetPoint("TOP", 0, -14)
+    title:SetText("Scan in progress")
+    local text = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    text:SetPoint("TOPLEFT", 20, -42)
+    text:SetPoint("TOPRIGHT", -20, -42)
+    text:SetJustifyH("CENTER")
+    text:SetWordWrap(true)
+    local accept = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
+    accept:SetSize(150, 24)
+    accept:SetPoint("BOTTOMRIGHT", frame, "BOTTOM", -6, 14)
+    accept:SetText("Close anyway")
+    local cancel = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
+    cancel:SetSize(150, 24)
+    cancel:SetPoint("BOTTOMLEFT", frame, "BOTTOM", 6, 14)
+    cancel:SetText("Keep open")
+    frame:Hide()
+    return { frame = frame, text = text, accept = accept, cancel = cancel }
+end
+
+--- Is the question on screen?
+function Guard.DialogShown()
+    return dialog ~= nil and dialog.frame:IsShown()
+end
+
+--- Put the question up; `action` runs only if the player answers "Close anyway".
+local function ask(action)
+    if not dialog then
+        dialog = buildDialog()
+        dialog.accept:SetScript("OnClick", function()
+            local pending = Guard.pending
+            Guard.pending = nil
+            dialog.frame:Hide()
+            Guard.applyGuards()
+            if pending then pending() end
+        end)
+        dialog.cancel:SetScript("OnClick", function()
+            Guard.pending = nil
+            dialog.frame:Hide()
+            Guard.applyGuards()
+        end)
+        Guard.dialog = dialog
+    end
+    Guard.pending = action
+    dialog.text:SetText(Guard.ConfirmText())
+    dialog.frame:Show()
+    Guard.applyGuards()
+end
+
+--- Take the question down without an answer (the scan ended, or the window went).
+local function dismissDialog()
+    Guard.pending = nil
+    if dialog then dialog.frame:Hide() end
+end
+
 --- Nothing here may touch the Auction House's own close button or hide its window from our code. Replacing the
 --- button's click handler (the first version did) makes everything the click then does run tainted, and the
 --- game's own close path then trips over protected calls ("tried to call the protected function
@@ -119,8 +187,7 @@ local function buildCloseCover(ahFrame)
     cover:RegisterForClicks("LeftButtonUp")
     cover:EnableMouse(false)
     cover:SetScript("OnClick", function()
-        Guard.pending = function() closeAfterAgreeing(ahFrame) end
-        StaticPopup_Show(POPUP)
+        ask(function() closeAfterAgreeing(ahFrame) end)
     end)
     return cover
 end
@@ -133,11 +200,16 @@ local function buildKeyGuard(ahFrame)
     keys:SetPropagateKeyboardInput(true)
     keys:EnableKeyboard(false)
     keys:SetScript("OnKeyDown", function(self, key)
-        local askingAlready = _G.StaticPopup_Visible and _G.StaticPopup_Visible(POPUP)
-        if key == "ESCAPE" and ahFrame:IsShown() and shouldGuard() and not askingAlready then
+        if _G.InCombatLockdown and _G.InCombatLockdown() then
+            self:SetPropagateKeyboardInput(true) -- in combat we never take a key
+        elseif key == "ESCAPE" and Guard.DialogShown() then
+            -- Esc answers our own question: keep the window open
+            self:SetPropagateKeyboardInput(false)
+            dismissDialog()
+            Guard.applyGuards()
+        elseif key == "ESCAPE" and ahFrame:IsShown() and shouldGuard() then
             self:SetPropagateKeyboardInput(false) -- this Esc is ours
-            Guard.pending = function() closeAfterAgreeing(ahFrame) end
-            StaticPopup_Show(POPUP)
+            ask(function() closeAfterAgreeing(ahFrame) end)
         else
             self:SetPropagateKeyboardInput(true)
         end
@@ -145,10 +217,11 @@ local function buildKeyGuard(ahFrame)
     return keys
 end
 
---- Listen for Esc, and take the mouse over the close button, only while there is something to protect.
+--- Listen for Esc, and take the mouse over the close button, only while there is something to protect (and
+--- for Esc, also while our question is up, since Esc answers it).
 function Guard.applyGuards()
     local on = shouldGuard()
-    if Guard.keys then Guard.keys:EnableKeyboard(on) end
+    if Guard.keys then Guard.keys:EnableKeyboard(on or Guard.DialogShown()) end
     if Guard.closeCover then Guard.closeCover:EnableMouse(on) end
 end
 local function setKeyGuard() Guard.applyGuards() end
@@ -165,23 +238,6 @@ function Guard.Install()
     Guard.applyGuards()
 end
 
-_G.StaticPopupDialogs = _G.StaticPopupDialogs or {}
-_G.StaticPopupDialogs[POPUP] = {
-    text = Guard.ConfirmText(),
-    button1 = "Close anyway",
-    button2 = "Keep open",
-    OnAccept = function()
-        local close = Guard.pending
-        Guard.pending = nil
-        if close then close() end
-    end,
-    OnCancel = function() Guard.pending = nil end,
-    timeout = 0,
-    whileDead = true,
-    hideOnEscape = true,
-    preferredIndex = 3,
-}
-
 Stockist.Events:On("AH_OPENED", function()
     windowOpen = true
     Guard.Install()
@@ -189,13 +245,12 @@ Stockist.Events:On("AH_OPENED", function()
 end, Guard)
 Stockist.Events:On("SCAN_STARTED", function() showProgress(0, "waiting"); Guard.applyGuards() end, Guard)
 Stockist.Events:On("SCAN_PROGRESS", showProgress, Guard)
-Stockist.Events:On("SCAN_COMPLETE", function() hideBanner(); Guard.applyGuards() end, Guard)
-Stockist.Events:On("SCAN_FAILED", function() hideBanner(); Guard.applyGuards() end, Guard)
+Stockist.Events:On("SCAN_COMPLETE", function() hideBanner(); dismissDialog(); Guard.applyGuards() end, Guard)
+Stockist.Events:On("SCAN_FAILED", function() hideBanner(); dismissDialog(); Guard.applyGuards() end, Guard)
 Stockist.Events:On("AH_CLOSED", function()
     hideBanner()
     windowOpen = false
     allowed = false
-    Guard.pending = nil
+    dismissDialog() -- the window is already gone: nothing left to confirm
     Guard.applyGuards()
-    if _G.StaticPopup_Hide then _G.StaticPopup_Hide(POPUP) end -- the window is already gone: nothing left to confirm
 end, Guard)

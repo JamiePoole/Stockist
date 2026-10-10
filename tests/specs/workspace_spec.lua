@@ -134,7 +134,7 @@ test("opening the workspace builds one window with a cell per layout entry", fun
     eq(StockistWorkspace ~= nil, true)
     eq(StockistWorkspace.shown, true)
     eq(S.Workspace.IsShown(), true)
-    eq(#UISpecialFrames, 1, "Esc closes it")
+    eq(#UISpecialFrames, 0, "not in the game's special-frames list; our own Esc listener closes it")
     Fake.uninstall()
 end)
 
@@ -188,7 +188,7 @@ test("reopening reuses the window and keeps the group's item unless told otherwi
     eq(S.Link.Get("A"), 8, "kept")
     S.Workspace.Show(7)
     eq(S.Link.Get("A"), 7)
-    eq(#UISpecialFrames, 1)
+    eq(#UISpecialFrames, 0)
     Fake.uninstall()
 end)
 
@@ -392,5 +392,89 @@ test("title bar: a 30px bar, 24px controls centred in it, and the same padding a
     local content = win.content.points
     eq(content[1][2], 8, "content: the same padding at the left"); eq(content[1][3], -(30 + 4))
     eq(content[2][2], -8); eq(content[2][3], 8)
+    Fake.uninstall()
+end)
+
+-- Esc, handled by our own listener (not by the game's special-frames list) -----------------------------
+
+--- The Esc listener, with what it does to the keyboard recorded.
+local function escListener(S)
+    local keys = S.UI.Window.escapeKeys()
+    local rec = { propagate = nil, listening = nil }
+    keys.SetPropagateKeyboardInput = function(_, v) rec.propagate = v end
+    keys.EnableKeyboard = function(_, on) rec.listening = on end
+    return keys, rec
+end
+
+test("Esc closes the most recently opened of our windows first, then the next, and then goes on to the game", function()
+    local S = setup()
+    local keys, rec = escListener(S)
+    S.Workspace.Show(7)
+    Fake.fire(StockistWorkspace, "OnShow")
+    S.PriceChart.Show(8)
+    Fake.fire(StockistChartWindow, "OnShow") -- (the stand-in does not run OnShow by itself)
+    eq(StockistChartWindow.shown, true); eq(StockistWorkspace.shown, true)
+    Fake.fire(keys, "OnKeyDown", "ESCAPE")
+    eq(StockistChartWindow.shown, false, "the pop-out, opened last, closes first")
+    Fake.fire(StockistChartWindow, "OnHide")
+    eq(StockistWorkspace.shown, true)
+    eq(rec.propagate, false, "and that Esc stops there")
+    Fake.fire(keys, "OnKeyDown", "ESCAPE")
+    Fake.fire(StockistWorkspace, "OnHide")
+    eq(StockistWorkspace.shown, false)
+    rec.propagate = nil
+    Fake.fire(keys, "OnKeyDown", "ESCAPE")
+    eq(rec.propagate, true, "with none of ours open, Esc is the game's")
+    Fake.uninstall()
+end)
+
+test("the Esc listener only listens while one of our windows is open, and other keys always pass", function()
+    local S = setup()
+    local keys, rec = escListener(S)
+    S.Workspace.Show(7)
+    Fake.fire(StockistWorkspace, "OnShow")
+    eq(rec.listening, true, "listening once a window is up")
+    for _, key in ipairs({ "A", "ENTER", "F5" }) do
+        rec.propagate = nil
+        Fake.fire(keys, "OnKeyDown", key)
+        eq(rec.propagate, true, key)
+    end
+    eq(StockistWorkspace.shown, true, "none of them closed anything")
+    StockistWorkspace:Hide()
+    Fake.fire(StockistWorkspace, "OnHide")
+    eq(rec.listening, false, "and not once they are all closed")
+    Fake.uninstall()
+end)
+
+test("Esc leaves our windows alone while the scan guard's question is up (Esc answers that)", function()
+    local S = setup()
+    local keys, rec = escListener(S)
+    S.AuctionHouseGuard = { DialogShown = function() return true end }
+    S.Workspace.Show(7)
+    Fake.fire(keys, "OnKeyDown", "ESCAPE")
+    eq(StockistWorkspace.shown, true)
+    eq(rec.propagate, true, "passed on, for the guard's own listener to take")
+    Fake.uninstall()
+end)
+
+test("none of our windows is ever added to the game's special-frames list", function()
+    local S = setup()
+    S.Workspace.Show(7)
+    S.PriceChart.Show(8)
+    S.PopOut.Open("chart", { itemID = 7 })
+    eq(#UISpecialFrames, 0)
+    Fake.uninstall()
+end)
+
+test("in combat our Esc listener takes nothing and never closes a window", function()
+    local S = setup()
+    local keys, rec = escListener(S)
+    S.Workspace.Show(7)
+    Fake.fire(StockistWorkspace, "OnShow")
+    InCombatLockdown = function() return true end
+    Fake.fire(keys, "OnKeyDown", "ESCAPE")
+    eq(StockistWorkspace.shown, true, "left open")
+    eq(rec.propagate, true, "and the game gets the key")
+    InCombatLockdown = nil
     Fake.uninstall()
 end)
