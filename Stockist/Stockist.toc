@@ -25,6 +25,7 @@ Data\Indicators.lua
 Data\ReadingStore.lua
 Data\Retention.lua
 Data\Tracked.lua
+Data\AlertRules.lua
 Market\Aggregate.lua
 Market\AuctionScanner.lua
 UI\Charts\Charts.lua
@@ -56,4 +57,6 @@ Features\Workspace.lua
 Features\StatusCommands.lua
 Features\DataCleanup.lua
 Features\AuctionHouseGuard.lua
+Features\AlertService.lua
+Features\AlertToasts.lua
 Core\Bootstrap.lua
