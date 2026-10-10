@@ -181,7 +181,7 @@ end
 --- Remove the globals again, so other specs see a plain Lua environment.
 function Fake.uninstall()
     for _, name in ipairs({ "CreateColor", "UIParent", "GameTooltip", "UISpecialFrames", "tinsert", "GetCursorPosition",
-        "CreateFrame", "C_Timer", "StockistChartWindow" }) do
+        "CreateFrame", "C_Timer", "StockistChartWindow", "StockistTooltip" }) do
         _G[name] = nil
     end
     for name in pairs(_G) do

@@ -316,7 +316,7 @@ test("an indicator the view cannot draw is disabled and ignores clicks, and its 
     eq(panel.state.indicators.sma, before, "a disabled button does nothing")
 
     Fake.fire(panel.toggleButtons.sma, "OnEnter")
-    eq(Fake.called(GameTooltip, "AddLine"), true, "the tooltip is shown even while disabled")
+    eq(Fake.called(S.UI.Tooltip.Frame(), "AddLine"), true, "the tooltip is shown even while disabled")
     Fake.uninstall()
 end)
 
@@ -369,9 +369,9 @@ test("hovering the item name asks the game for its tooltip", function()
     local panel = S.ChartPanel.Create(UIParent)
     panel:SetItem(7)
     Fake.fire(panel.nameHit, "OnEnter")
-    eq(Fake.called(GameTooltip, "SetItemByID"), true)
+    eq(Fake.called(S.UI.Tooltip.Frame(), "SetItemByID"), true)
     Fake.fire(panel.nameHit, "OnLeave")
-    eq(GameTooltip.shown, false, "the tooltip is hidden again")
+    eq(S.UI.Tooltip.Frame().shown, false, "the tooltip is hidden again")
     Fake.uninstall()
 end)
 

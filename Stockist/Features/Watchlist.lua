@@ -130,17 +130,17 @@ local function buildRow(self, parent)
     row:SetScript("OnEnter", function(r)
         r.hoverBg:Show()
         if r.itemID then
-            GameTooltip:SetOwner(r, "ANCHOR_RIGHT")
+            Stockist.UI.Tooltip.Frame():SetOwner(r, "ANCHOR_RIGHT")
             local _, short, detail = Stockist.Help.Lines("watchlist-row")
-            GameTooltip:AddLine(Stockist.ItemInfo.ColoredName(r.itemID), 1, 1, 1)
-            if short then GameTooltip:AddLine(short, 0.8, 0.8, 0.8, true) end
-            if detail then GameTooltip:AddLine(detail, 0.55, 0.8, 1, true) end
-            GameTooltip:Show()
+            Stockist.UI.Tooltip.Frame():AddLine(Stockist.ItemInfo.ColoredName(r.itemID), 1, 1, 1)
+            if short then Stockist.UI.Tooltip.Frame():AddLine(short, 0.8, 0.8, 0.8, true) end
+            if detail then Stockist.UI.Tooltip.Frame():AddLine(detail, 0.55, 0.8, 1, true) end
+            Stockist.UI.Tooltip.Frame():Show()
         end
     end)
     row:SetScript("OnLeave", function(r)
         r.hoverBg:Hide()
-        GameTooltip:Hide()
+        Stockist.UI.Tooltip.Frame():Hide()
     end)
     row:SetScript("OnClick", function(r)
         if Stockist.ItemPicker.ClickIsDrop() then return end -- an item let go over it, not a click on it

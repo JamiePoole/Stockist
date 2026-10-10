@@ -34,14 +34,14 @@ local function button(parent, text, width, helpKey, extra)
 end
 
 local function showItemTooltip(owner, itemID)
-    GameTooltip:SetOwner(owner, "ANCHOR_RIGHT")
-    if GameTooltip.SetItemByID then
-        GameTooltip:SetItemByID(itemID)
+    Stockist.UI.Tooltip.Frame():SetOwner(owner, "ANCHOR_RIGHT")
+    if Stockist.UI.Tooltip.Frame().SetItemByID then
+        Stockist.UI.Tooltip.Frame():SetItemByID(itemID)
     else
-        GameTooltip:SetHyperlink("item:" .. itemID)
+        Stockist.UI.Tooltip.Frame():SetHyperlink("item:" .. itemID)
     end
-    GameTooltip:AddLine("Click to pick another item", 0.55, 0.62, 0.75)
-    GameTooltip:Show()
+    Stockist.UI.Tooltip.Frame():AddLine("Click to pick another item", 0.55, 0.62, 0.75)
+    Stockist.UI.Tooltip.Frame():Show()
 end
 
 --- Create a chart panel filling `parent`. `opts` (optional): itemID, timeframe ("1D"/"1W"/"1M"),
@@ -96,11 +96,11 @@ function ChartPanel.Create(parent, opts)
     end)
     self.nameHit:SetScript("OnLeave", function()
         self:ShadeDots(DOT_REST)
-        GameTooltip:Hide()
+        Stockist.UI.Tooltip.Frame():Hide()
     end)
     -- Clicking the name opens the item picker under it.
     self.nameHit:SetScript("OnMouseUp", function(hit)
-        GameTooltip:Hide()
+        Stockist.UI.Tooltip.Frame():Hide()
         local picker = Stockist.ItemPicker
         if picker.IsShown() and picker.Anchor() == hit then return picker.Hide() end -- a second click closes it
         picker.Show(hit, function(itemID) self:Pick(itemID) end)
