@@ -106,42 +106,88 @@ end)
 
 -- The close button ----------------------------------------------------------------------------------
 
-test("with no scan running the close button closes the window as before", function()
+--- A close request the game would act on: counts C_AuctionHouse.CloseAuctionHouse calls.
+local function watchClose(state)
+    state.serverClosed = 0
+    C_AuctionHouse = { CloseAuctionHouse = function() state.serverClosed = state.serverClosed + 1 end }
+end
+
+test("the real close button is never touched: its own click handler stays exactly as the game set it", function()
     local S, state = setup()
+    local before = state.ah.CloseButton:GetScript("OnClick")
     S.Events:Fire("AH_OPENED")
+    S.Scanner.inProgress = true
+    S.Events:Fire("SCAN_STARTED")
+    eq(state.ah.CloseButton:GetScript("OnClick"), before, "no handler was replaced or wrapped")
     Fake.fire(state.ah.CloseButton, "OnClick")
-    eq(state.closed, 1, "the original handler ran")
-    eq(#state.popups, 0, "and nothing was asked")
+    eq(state.closed, 1, "and it still closes the window by itself")
     cleanup()
 end)
 
-test("with a scan running the close button asks first, and closes only if the player agrees", function()
+test("the cover over the close button takes the mouse only while a scan runs", function()
     local S, state = setup()
     S.Events:Fire("AH_OPENED")
+    local cover = S.AuctionHouseGuard.closeCover
+    eq(cover ~= nil, true)
+    eq(cover.mouseEnabled, false, "inert with no scan: clicks reach the real button")
     S.Scanner.inProgress = true
-    Fake.fire(state.ah.CloseButton, "OnClick")
-    eq(state.closed, 0, "not closed yet")
-    eq(state.popups[1], "STOCKIST_CLOSE_AUCTION_HOUSE", "the question was put")
-    StaticPopupDialogs["STOCKIST_CLOSE_AUCTION_HOUSE"].OnAccept()
-    eq(state.closed, 1, "'Close anyway' runs the original close")
-    eq(S.AuctionHouseGuard.pending, nil)
-    cleanup()
-end)
-
-test("answering 'Keep open' leaves the window, and a later close is asked about again", function()
-    local S, state = setup()
-    S.Events:Fire("AH_OPENED")
-    S.Scanner.inProgress = true
-    Fake.fire(state.ah.CloseButton, "OnClick")
-    StaticPopupDialogs["STOCKIST_CLOSE_AUCTION_HOUSE"].OnCancel()
-    eq(state.closed, 0)
-    eq(S.AuctionHouseGuard.pending, nil)
-    Fake.fire(state.ah.CloseButton, "OnClick")
-    eq(#state.popups, 2, "asked again")
-    -- and once the scan is over it just closes
+    S.Events:Fire("SCAN_STARTED")
+    eq(cover.mouseEnabled, true, "in the way during a scan")
     S.Scanner.inProgress = false
-    Fake.fire(state.ah.CloseButton, "OnClick")
-    eq(state.closed, 1)
+    S.Events:Fire("SCAN_COMPLETE", 1, 0)
+    eq(cover.mouseEnabled, false, "and out of the way again")
+    S.Scanner.inProgress = true
+    S.Events:Fire("SCAN_STARTED")
+    S.Events:Fire("AH_CLOSED")
+    eq(cover.mouseEnabled, false, "and not once the window is gone")
+    cleanup()
+end)
+
+test("clicking the cover during a scan asks first, and agreeing asks the server to close", function()
+    local S, state = setup()
+    watchClose(state)
+    S.Events:Fire("AH_OPENED")
+    S.Scanner.inProgress = true
+    S.Events:Fire("SCAN_STARTED")
+    Fake.fire(S.AuctionHouseGuard.closeCover, "OnClick")
+    eq(state.popups[1], "STOCKIST_CLOSE_AUCTION_HOUSE", "the question was put")
+    eq(state.serverClosed, 0, "nothing closed yet")
+    StaticPopupDialogs["STOCKIST_CLOSE_AUCTION_HOUSE"].OnAccept()
+    eq(state.serverClosed, 1, "'Close anyway' asks the server, not the window")
+    eq(state.closed, 0, "our code never presses or hides the game's own button or window")
+    C_AuctionHouse = nil
+    cleanup()
+end)
+
+test("answering 'Keep open' closes nothing and the next click is asked about again", function()
+    local S, state = setup()
+    watchClose(state)
+    S.Events:Fire("AH_OPENED")
+    S.Scanner.inProgress = true
+    S.Events:Fire("SCAN_STARTED")
+    local cover = S.AuctionHouseGuard.closeCover
+    Fake.fire(cover, "OnClick")
+    StaticPopupDialogs["STOCKIST_CLOSE_AUCTION_HOUSE"].OnCancel()
+    eq(state.serverClosed, 0); eq(S.AuctionHouseGuard.pending, nil)
+    Fake.fire(cover, "OnClick")
+    eq(#state.popups, 2, "asked again")
+    C_AuctionHouse = nil
+    cleanup()
+end)
+
+test("after 'Close anyway' the guard stands aside, so the player's own click on the real button goes through", function()
+    local S, state = setup()
+    watchClose(state)
+    state.ah.shown = true
+    S.Events:Fire("AH_OPENED")
+    S.Scanner.inProgress = true
+    S.Events:Fire("SCAN_STARTED")
+    local cover = S.AuctionHouseGuard.closeCover
+    Fake.fire(cover, "OnClick")
+    StaticPopupDialogs["STOCKIST_CLOSE_AUCTION_HOUSE"].OnAccept()
+    eq(cover.mouseEnabled, false, "out of the way: the next click reaches the real button")
+    eq(S.AuctionHouseGuard.keys.keyboard ~= true, true)
+    C_AuctionHouse = nil
     cleanup()
 end)
 
@@ -149,45 +195,33 @@ test("if the window closes by itself (walking away) the question disappears", fu
     local S, state = setup()
     S.Events:Fire("AH_OPENED")
     S.Scanner.inProgress = true
-    Fake.fire(state.ah.CloseButton, "OnClick")
+    S.Events:Fire("SCAN_STARTED")
+    Fake.fire(S.AuctionHouseGuard.closeCover, "OnClick")
     S.Events:Fire("AH_CLOSED")
     eq(state.hidden[1], "STOCKIST_CLOSE_AUCTION_HOUSE", "the popup was taken down")
     eq(S.AuctionHouseGuard.pending, nil, "and a late 'Close anyway' does nothing")
+    watchClose(state)
     StaticPopupDialogs["STOCKIST_CLOSE_AUCTION_HOUSE"].OnAccept()
-    eq(state.closed, 0)
+    eq(state.serverClosed, 0)
+    C_AuctionHouse = nil
     cleanup()
 end)
 
-test("the close button is only wrapped once, however often the window opens", function()
-    local S, state = setup()
-    S.Events:Fire("AH_OPENED"); S.Events:Fire("AH_OPENED"); S.Events:Fire("AH_OPENED")
-    S.Scanner.inProgress = true
-    Fake.fire(state.ah.CloseButton, "OnClick")
-    eq(#state.popups, 1, "one question, not three")
-    StaticPopupDialogs["STOCKIST_CLOSE_AUCTION_HOUSE"].OnAccept()
-    eq(state.closed, 1, "and one close")
-    cleanup()
-end)
-
-test("a close button with no handler of its own falls back to hiding the window", function()
-    local S, state = setup(false)
-    local ah = CreateFrame("Frame", "AuctionHouseFrame", UIParent)
-    ah.CloseButton = CreateFrame("Button", nil, ah) -- no OnClick script
-    S.Events:Fire("AH_OPENED")
-    local hid = 0
-    HideUIPanel = function() hid = hid + 1 end
-    Fake.fire(ah.CloseButton, "OnClick")
-    eq(hid, 1)
-    HideUIPanel = nil
-    cleanup()
-end)
-
-test("pressing the original keys of a scan-less window never raises the question", function()
+test("the cover is built once per window, however often the Auction House opens", function()
     local S, state = setup()
     S.Events:Fire("AH_OPENED")
-    S.Scanner = nil -- no scanner at all (nothing to protect)
-    Fake.fire(state.ah.CloseButton, "OnClick")
-    eq(state.closed, 1); eq(#state.popups, 0)
+    local first = S.AuctionHouseGuard.closeCover
+    S.Events:Fire("AH_OPENED"); S.Events:Fire("AH_OPENED")
+    eq(S.AuctionHouseGuard.closeCover, first)
+    cleanup()
+end)
+
+test("with no scanner at all there is nothing to protect and nothing in the way", function()
+    local S, state = setup()
+    S.Events:Fire("AH_OPENED")
+    S.Scanner = nil
+    S.Events:Fire("SCAN_COMPLETE", 1, 0)
+    eq(S.AuctionHouseGuard.closeCover.mouseEnabled, false)
     cleanup()
 end)
 
@@ -228,11 +262,10 @@ test("Esc during a scan is taken and asks first; closing happens only if the pla
     Fake.fire(state.keys, "OnKeyDown", "ESCAPE")
     eq(state.propagate, false, "the game does not get this Esc")
     eq(state.popups[1], "STOCKIST_CLOSE_AUCTION_HOUSE", "the question was put")
-    local hid = 0
-    HideUIPanel = function() hid = hid + 1 end
+    watchClose(state)
     StaticPopupDialogs["STOCKIST_CLOSE_AUCTION_HOUSE"].OnAccept()
-    eq(hid, 1, "'Close anyway' closes the window")
-    HideUIPanel = nil
+    eq(state.serverClosed, 1, "'Close anyway' asks the server to close")
+    C_AuctionHouse = nil
     cleanup()
 end)
 
@@ -240,11 +273,10 @@ test("Esc answered with 'Keep open' leaves the window alone", function()
     local S, state = withKeys()
     S.Scanner.inProgress = true
     Fake.fire(state.keys, "OnKeyDown", "ESCAPE")
-    local hid = 0
-    HideUIPanel = function() hid = hid + 1 end
+    watchClose(state)
     StaticPopupDialogs["STOCKIST_CLOSE_AUCTION_HOUSE"].OnCancel()
-    eq(hid, 0); eq(S.AuctionHouseGuard.pending, nil)
-    HideUIPanel = nil
+    eq(state.serverClosed, 0); eq(S.AuctionHouseGuard.pending, nil)
+    C_AuctionHouse = nil
     cleanup()
 end)
 

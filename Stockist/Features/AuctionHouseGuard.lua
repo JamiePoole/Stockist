@@ -1,9 +1,9 @@
 local ADDON_NAME, Stockist = ...
 
 -- Looking after a running scan while the Auction House window is open:
---   * a banner under the window says a scan is running and to keep the window open, with how far it has got;
---   * pressing the window's close button during a scan asks first, because closing cancels it and a full scan
---     cannot be repeated for about 15 minutes.
+--   * a banner along the window's top edge says a scan is running and to keep the window open, with progress;
+--   * pressing the window's close button, or Esc, during a scan asks first, because closing cancels it and a
+--     full scan cannot be repeated for about 15 minutes.
 -- Closing cannot be prevented outright: the server closes the window when the player walks away or enters
 -- combat. This covers the deliberate closes, the commonest accident: the close button and Esc.
 local Guard = {}
@@ -76,32 +76,53 @@ local function hideBanner()
     if banner then banner.frame:Hide() end
 end
 
---- Close the window the way its own close button does.
-local function closeWindow(ahFrame)
-    if _G.HideUIPanel then return _G.HideUIPanel(ahFrame) end
-    ahFrame:Hide()
+--- Nothing here may touch the Auction House's own close button or hide its window from our code. Replacing the
+--- button's click handler (the first version did) makes everything the click then does run tainted, and the
+--- game's own close path then trips over protected calls ("tried to call the protected function
+--- SpellStopCasting()"). So the guard is a separate transparent button laid over the close button that only
+--- takes the mouse while a scan runs, and closing, once the player agrees, is asked of the server
+--- (`C_AuctionHouse.CloseAuctionHouse`), whose answer the game's own code handles securely.
+
+--- Is the guard standing aside for a moment, so the player's own click on the real close button goes through?
+local allowed = false
+local windowOpen = false -- the Auction House window is up (set by AH_OPENED and AH_CLOSED)
+
+local function shouldGuard()
+    return windowOpen and not allowed and Guard.ShouldConfirm()
 end
 
---- Put the close confirmation in front of the window's close button. The button's own handler still does the
---- closing, once the player agrees.
-local function guardCloseButton(ahFrame)
-    local button = ahFrame.CloseButton or _G.AuctionHouseFrameCloseButton
-    if not (button and button.SetScript) or button.stockistGuarded then return end
-    button.stockistGuarded = true
-    local original = button:GetScript("OnClick")
-    local function close(self, ...)
-        if original then return original(self, ...) end
-        closeWindow(ahFrame)
-    end
-    button:SetScript("OnClick", function(self, ...)
-        if Guard.ShouldConfirm() then
-            local args = { ... }
-            Guard.pending = function() close(self, unpack(args)) end
-            StaticPopup_Show(POPUP)
-        else
-            close(self, ...)
+--- Called after the player says "Close anyway": ask the server to close, and if the window is still up a moment
+--- later, let the next click or Esc through untouched (nothing of ours in its way).
+local function closeAfterAgreeing(ahFrame)
+    allowed = true
+    Guard.applyGuards()
+    if _G.C_AuctionHouse and _G.C_AuctionHouse.CloseAuctionHouse then pcall(_G.C_AuctionHouse.CloseAuctionHouse) end
+    C_Timer.After(0.5, function()
+        if ahFrame:IsShown() and Stockist.Print then
+            Stockist.Print("Click the Auction House's close button (or press Esc) again to close it.")
         end
     end)
+    C_Timer.After(10, function()
+        allowed = false
+        Guard.applyGuards()
+    end)
+end
+
+--- A transparent button over the window's close button. Inert (it does not take the mouse at all) except while a
+--- scan runs, so with no scan the player's click reaches the real button untouched.
+local function buildCloseCover(ahFrame)
+    local button = ahFrame.CloseButton or _G.AuctionHouseFrameCloseButton
+    if not button then return nil end
+    local cover = CreateFrame("Button", nil, button:GetParent() or ahFrame)
+    cover:SetAllPoints(button)
+    cover:SetFrameLevel((button:GetFrameLevel() or 1) + 10)
+    cover:RegisterForClicks("LeftButtonUp")
+    cover:EnableMouse(false)
+    cover:SetScript("OnClick", function()
+        Guard.pending = function() closeAfterAgreeing(ahFrame) end
+        StaticPopup_Show(POPUP)
+    end)
+    return cover
 end
 
 --- Esc: while a scan runs, a frame that listens to the keyboard takes the Esc press and asks first, instead of
@@ -113,9 +134,9 @@ local function buildKeyGuard(ahFrame)
     keys:EnableKeyboard(false)
     keys:SetScript("OnKeyDown", function(self, key)
         local askingAlready = _G.StaticPopup_Visible and _G.StaticPopup_Visible(POPUP)
-        if key == "ESCAPE" and ahFrame:IsShown() and Guard.ShouldConfirm() and not askingAlready then
+        if key == "ESCAPE" and ahFrame:IsShown() and shouldGuard() and not askingAlready then
             self:SetPropagateKeyboardInput(false) -- this Esc is ours
-            Guard.pending = function() closeWindow(ahFrame) end
+            Guard.pending = function() closeAfterAgreeing(ahFrame) end
             StaticPopup_Show(POPUP)
         else
             self:SetPropagateKeyboardInput(true)
@@ -124,10 +145,13 @@ local function buildKeyGuard(ahFrame)
     return keys
 end
 
---- Listen for Esc only while there is something to protect.
-local function setKeyGuard(on)
+--- Listen for Esc, and take the mouse over the close button, only while there is something to protect.
+function Guard.applyGuards()
+    local on = shouldGuard()
     if Guard.keys then Guard.keys:EnableKeyboard(on) end
+    if Guard.closeCover then Guard.closeCover:EnableMouse(on) end
 end
+local function setKeyGuard() Guard.applyGuards() end
 
 --- Called each time the Auction House opens; builds the banner and the guards once for the window.
 function Guard.Install()
@@ -135,10 +159,10 @@ function Guard.Install()
     if not ahFrame or installedOn == ahFrame then return end
     installedOn = ahFrame
     banner = buildBanner(ahFrame)
-    guardCloseButton(ahFrame)
+    Guard.closeCover = buildCloseCover(ahFrame)
     Guard.banner = banner
     Guard.keys = buildKeyGuard(ahFrame)
-    setKeyGuard(Guard.ShouldConfirm())
+    Guard.applyGuards()
 end
 
 _G.StaticPopupDialogs = _G.StaticPopupDialogs or {}
@@ -158,14 +182,20 @@ _G.StaticPopupDialogs[POPUP] = {
     preferredIndex = 3,
 }
 
-Stockist.Events:On("AH_OPENED", Guard.Install, Guard)
-Stockist.Events:On("SCAN_STARTED", function() showProgress(0, "waiting"); setKeyGuard(true) end, Guard)
+Stockist.Events:On("AH_OPENED", function()
+    windowOpen = true
+    Guard.Install()
+    Guard.applyGuards()
+end, Guard)
+Stockist.Events:On("SCAN_STARTED", function() showProgress(0, "waiting"); Guard.applyGuards() end, Guard)
 Stockist.Events:On("SCAN_PROGRESS", showProgress, Guard)
-Stockist.Events:On("SCAN_COMPLETE", function() hideBanner(); setKeyGuard(false) end, Guard)
-Stockist.Events:On("SCAN_FAILED", function() hideBanner(); setKeyGuard(false) end, Guard)
+Stockist.Events:On("SCAN_COMPLETE", function() hideBanner(); Guard.applyGuards() end, Guard)
+Stockist.Events:On("SCAN_FAILED", function() hideBanner(); Guard.applyGuards() end, Guard)
 Stockist.Events:On("AH_CLOSED", function()
     hideBanner()
-    setKeyGuard(false)
+    windowOpen = false
+    allowed = false
     Guard.pending = nil
+    Guard.applyGuards()
     if _G.StaticPopup_Hide then _G.StaticPopup_Hide(POPUP) end -- the window is already gone: nothing left to confirm
 end, Guard)
