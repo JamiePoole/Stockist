@@ -26,6 +26,46 @@ local PADDING = 8
 local CONTENT_GAP = 4 -- between the title bar and the content
 Window.TITLE_HEIGHT, Window.CONTROL_HEIGHT, Window.PADDING = TITLE_HEIGHT, CONTROL_HEIGHT, PADDING
 
+-- Esc closes our windows through our own key listener, not by adding them to the game's UISpecialFrames list.
+-- That list is walked by the game's own code (CloseSpecialWindows and CloseAllWindows, which runs when you land
+-- from a flight, among other times); entries added by an addon make that walk run tainted, and the game's own
+-- windows it then hides trip over protected calls ("tried to call the protected function SpellStopCasting()").
+-- One listener serves every window: it listens only while one is open, closes the most recently opened one, and
+-- passes Esc on to the game when none is.
+local shown = {} -- our open windows, oldest first
+local escKeys
+
+local function escapeKeys()
+    if escKeys then return escKeys end
+    escKeys = CreateFrame("Frame", nil, UIParent)
+    escKeys:SetPropagateKeyboardInput(true)
+    escKeys:EnableKeyboard(false)
+    escKeys:SetScript("OnKeyDown", function(self, key)
+        local guard = Stockist.AuctionHouseGuard
+        local top = shown[#shown]
+        local inCombat = _G.InCombatLockdown and _G.InCombatLockdown()
+        if key == "ESCAPE" and top and not inCombat and not (guard and guard.DialogShown and guard.DialogShown()) then
+            self:SetPropagateKeyboardInput(false) -- this Esc closes our window and goes no further
+            top:Hide()
+        else
+            self:SetPropagateKeyboardInput(true)
+        end
+    end)
+    return escKeys
+end
+Window.escapeKeys = escapeKeys
+
+local function noteShown(frame)
+    for i, f in ipairs(shown) do if f == frame then table.remove(shown, i) break end end
+    shown[#shown + 1] = frame
+    escapeKeys():EnableKeyboard(true)
+end
+
+local function noteHidden(frame)
+    for i, f in ipairs(shown) do if f == frame then table.remove(shown, i) break end end
+    escapeKeys():EnableKeyboard(#shown > 0)
+end
+
 local function saveGeometry(frame, name)
     if not (Stockist.settings and name) then return end
     local point, _, relPoint, x, y = frame:GetPoint()
@@ -57,7 +97,11 @@ function Window.Create(opts)
     -- the background of a newer one. Top-level windows are raised whole, children included, when clicked,
     -- and we raise a window as it opens so it starts on top.
     frame:SetToplevel(true)
-    frame:HookScript("OnShow", function(self) self:Raise() end)
+    frame:HookScript("OnShow", function(self)
+        self:Raise()
+        noteShown(self)
+    end)
+    frame:HookScript("OnHide", function(self) noteHidden(self) end)
     frame:SetClampedToScreen(true)
     frame:EnableMouse(true) -- the whole window is solid: clicks on empty areas must not reach the world behind
     frame:SetMovable(true)
@@ -158,8 +202,7 @@ function Window.Create(opts)
         saveGeometry(frame, opts.name)
     end)
 
-    if opts.name then tinsert(UISpecialFrames, opts.name) end -- Esc closes it
-    frame:Hide()
+    frame:Hide() -- (Esc is handled by the listener above, not by UISpecialFrames)
 
     return { frame = frame, content = content, title = title, helpButton = help, searchBox = search, bar = bar }
 end

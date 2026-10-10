@@ -406,7 +406,7 @@ test("PriceChart.Show opens one window and reuses it for other items", function(
     S.PriceChart.Show(8)
     eq(StockistChartWindow, win, "same window")
     Fake.flush() -- the deferred second layout pass runs without error
-    eq(#UISpecialFrames, 1, "registered for Esc once")
+    eq(#UISpecialFrames, 0, "not added to the game's special-frames list (that taints the game's own close code)")
     Fake.uninstall()
 end)
 
